@@ -1,0 +1,11 @@
+# Dependencies / runtime
+node_modules/
+bun.lockb
+logs/
+*.log
+
+# Runtime data (pairing certs live here on installed hosts)
+data/
+
+# macOS
+.DS_Store

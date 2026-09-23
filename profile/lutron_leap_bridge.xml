@@ -1,0 +1,1234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd"
+    manufacturer="Lutron"
+    model="LEAP Bridge"
+    device_class="Lighting_controller"
+    rpm_xml_version="1.11"
+    minimum_component_engine_version="7.2">
+    <notes>
+        Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
+
+        This profile connects to the savant-lutron-bridge service running on the
+        Savant Pro Host via HTTP on port 47200. HTTP is used (instead of TCP 8023)
+        so that Savant can serialize bleColor data from the color wheel into URL
+        query parameters — something TCP command strings cannot do.
+
+        Setup:
+        1. Install and run savant-lutron-bridge on the Pro Host Mac Mini
+        2. Open http://localhost:47200 to pair with the Lutron processor
+        3. In Blueprint, set the Address/Host to 127.0.0.1, Port to 47200
+        4. Use the Lighting Data Table — Address1 = LEAP Zone ID (shown in web UI)
+        5. Use the Shade Data Table  — Address1 = LEAP Zone ID (shade zones)
+
+        Address fields:
+          Lighting/Shade table: Address1 = LEAP Zone ID
+          Keypad Button entity: Address1 = LEAP Device ID, Address2 = Button Number,
+                                Address3 = LED ID (from Keypads tab in web UI)
+
+        State Variables:
+          SystemType  — QSX or RA3 (informational; bridge auto-detects)
+          FadeTime    — default fade time in seconds for switch on/off actions
+
+        Note on status feedback:
+          This profile uses HTTP (request-response). Push feedback from physical
+          keypads requires the bridge TCP port 8023 to be added as a separate
+          monitoring connection in Blueprint if needed. For most use cases, the
+          optimistic state updates in each action are sufficient.
+
+        ====================== Change Log ======================
+        Version 1.11 Fix: HVAC commands use GoToDualSetPointParameters with nested DualSetPointParameters;
+                             thermostat state variables get unique_identifier="ThermostatID" so Savant
+                             can bind per-instance state to the thermostat screen.
+        Version 1.8  Add: Palladiom thermostat support via ENV_HVACCONTROLLER_SOURCE.
+        Version 1.9  Fix: fan modes corrected to High/Medium/Low (removed Circulate); add state variables and actions for all three.
+        Version 1.10 Fix: add QueryDimmerLevel response parsing and query_status_with_action polling so physical keypad changes reflect in Savant app.
+                             HVAC endpoints: /api/hvac/status, /api/hvac/heat, /api/hvac/cool,
+                             /api/hvac/mode, /api/hvac/fan. Address1 = LEAP HVAC controller ID.
+        Version 1.7  Test: Added DMX entity (DimmerSet + CurrentColor valueSource) to test
+                             whether Savant populates bleColor* args for DMX entity type.
+                             DimmerSet now includes bleColor* args and routes to /api/color.
+        Version 1.6  Fix: Renamed entities to match Blueprint data table conventions:
+                             "Ketra Color" → "Color Slider" (Type RGBW),
+                             "Tunable White" → "CCT Slider" (Type WW).
+                             Fixed valueSource names: CurrentBleColor → ColorLevel,
+                             CurrentColorTemperature → CCTLevel.
+        Version 1.5  Change: Migrated from TCP (port 8023) to HTTP (port 47200).
+                             All commands now use HTTP GET with query parameters.
+                             bleColorRed/Green/Blue/White now serialize correctly
+                             in URL params, enabling Ketra color wheel support.
+                             /api/color and /api/cct endpoints added to bridge.
+                             All other endpoints (zone, area, shade, scene, button)
+                             added as GET variants on port 47200.
+        Version 1.4  Fix: RFDimmerSet sends #COLORSET with bleColor data over TCP.
+        Version 1.3  Fix: Replaced linear Color/Vibrancy slider with color wheel.
+        Version 1.1  Fix: resource_type attributes, shade #SHADEGRP, fan controller.
+        Version 1.0  Initial release.
+    </notes>
+
+    <control_interfaces preferred="ip">
+        <ip port="47200" response_time_length_ms="3000" name_on_component="HTTP" protocol="http">
+        </ip>
+    </control_interfaces>
+
+    <media_interfaces>
+        <data name_on_component="HTTP">
+            <combined_media>
+                <data_media type="ethernet"/>
+                <control port="47200"/>
+            </combined_media>
+        </data>
+        <internal name_on_component="Lighting Controller">
+            <environmental_media></environmental_media>
+            <resource resource_type="ENV_LIGHTINGCONTROLLER_SOURCE"/>
+            <resource resource_type="ENV_SHADECONTROLLER_SOURCE"/>
+            <resource resource_type="ENV_FANCONTROLLER_SOURCE"/>
+            <resource resource_type="ENV_HVACCONTROLLER_SOURCE"/>
+        </internal>
+    </media_interfaces>
+
+    <state_variable_list>
+        <state_variable name="SystemType" user_editable="yes" note="Processor type: QSX or RA3">QSX</state_variable>
+        <state_variable name="FadeTime" user_editable="yes" note="Default fade time in seconds">1</state_variable>
+        <state_variable name="FanSet_0" owning_logical_component="Lighting" user_editable="yes" note="Fan Speed Off value">0</state_variable>
+        <state_variable name="FanSet_1" owning_logical_component="Lighting" user_editable="yes" note="Fan Speed Low value">25</state_variable>
+        <state_variable name="FanSet_2" owning_logical_component="Lighting" user_editable="yes" note="Fan Speed Med value">50</state_variable>
+        <state_variable name="FanSet_3" owning_logical_component="Lighting" user_editable="yes" note="Fan Speed High value">100</state_variable>
+        <state_variable name="ThermostatCurrentTemperature" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="ThermostatCurrentTemperature" state_center_type="string" receive_updates_from_state_center="yes">--</state_variable>
+        <state_variable name="ThermostatCurrentHeatPoint" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="ThermostatCurrentHeatPoint" state_center_type="string" receive_updates_from_state_center="yes" min_value="40" max_value="90">68</state_variable>
+        <state_variable name="ThermostatCurrentCoolPoint" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="ThermostatCurrentCoolPoint" state_center_type="string" receive_updates_from_state_center="yes" min_value="60" max_value="99">76</state_variable>
+        <state_variable name="ThermostatMode" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="ThermostatMode" state_center_type="string" receive_updates_from_state_center="yes">Off</state_variable>
+        <state_variable name="ThermostatFanMode" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="ThermostatFanMode" state_center_type="string" receive_updates_from_state_center="yes">Auto</state_variable>
+        <state_variable name="IsCurrentHVACModeHeat" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsCurrentHVACModeHeat" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsCurrentHVACModeCool" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsCurrentHVACModeCool" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsCurrentHVACModeAuto" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsCurrentHVACModeAuto" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsCurrentHVACModeOff" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsCurrentHVACModeOff" state_center_type="boolean" receive_updates_from_state_center="yes">true</state_variable>
+        <state_variable name="IsThermostatCurrentFanModeAuto" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeAuto" state_center_type="boolean" receive_updates_from_state_center="yes">true</state_variable>
+        <state_variable name="IsThermostatCurrentFanModeOn" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeOn" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsThermostatCurrentFanModeHigh" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeHigh" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsThermostatCurrentFanModeMedium" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeMedium" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+        <state_variable name="IsThermostatCurrentFanModeLow" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeLow" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+    </state_variable_list>
+
+    <logical_component logical_component_name="Lighting_controller">
+        <implementation>
+            <internal name_on_component="Lighting Controller"></internal>
+        </implementation>
+
+        <!-- ═══════════════════════════════════════════════════════════════════
+             LIGHTING CONTROLLER
+             ═══════════════════════════════════════════════════════════════════ -->
+        <resource_component_actions resource_type="ENV_LIGHTINGCONTROLLER_SOURCE">
+
+            <!-- GET /api/color if r/g/b/w present, else /api/zone/level -->
+            <action name="DimmerSet">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="not used"/>
+                <action_argument name="Address4" note="not used"/>
+                <action_argument name="Address5" note="not used"/>
+                <action_argument name="Address6" note="not used"/>
+                <action_argument name="DimmerLevel" note="Target Intensity (0-100)"/>
+                <action_argument name="FadeTime" note="Fade duration in seconds"/>
+                <action_argument name="DelayTime" note="not used"/>
+                <action_argument name="bleColorRed" note="Red 0-255 (DMX entity color wheel)"/>
+                <action_argument name="bleColorGreen" note="Green 0-255"/>
+                <action_argument name="bleColorBlue" note="Blue 0-255"/>
+                <action_argument name="bleColorWhite" note="White 0-255"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/color</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
+                            <parameter parameter_data_type="character"><![CDATA[&r=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorRed"/>
+                            <parameter parameter_data_type="character"><![CDATA[&g=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorGreen"/>
+                            <parameter parameter_data_type="character"><![CDATA[&b=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorBlue"/>
+                            <parameter parameter_data_type="character"><![CDATA[&w=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorWhite"/>
+                            <parameter parameter_data_type="character"><![CDATA[&fade=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="FadeTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="DimmerIncrease">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/raise</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="DimmerDecrease">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/lower</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="DimmerStop">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/stop</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="QueryDimmerLevel">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <action_argument name="DimmerNumber" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="yes" http_request_type="GET">
+                        <command_string type="character">api/zone/query</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <response_codes>
+                            <rspmessage status="success" name="ZoneLevel">
+                                <constant type="character">200</constant>
+                                <root_object name="none" matches_required="at_least_one" format="json">
+                                    <values path="/none/level" matches_required="at_least_one">
+                                        <update state="DimmerLevel" type="integer"></update>
+                                    </values>
+                                </root_object>
+                            </rspmessage>
+                        </response_codes>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Switch on/off — uses FadeTime state variable -->
+            <action name="SwitchOn">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=100&fade=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="FadeTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="SwitchOff">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=0&fade=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="FadeTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Area level: GET /api/area/level?id={area}&level={level}&fade={fade} -->
+            <action name="RFDimmerSet">
+                <action_argument name="Address1" note="LEAP Area or Zone ID"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="not used"/>
+                <action_argument name="Address4" note="not used"/>
+                <action_argument name="Address5" note="not used"/>
+                <action_argument name="Address6" note="not used"/>
+                <action_argument name="DimmerLevel" note="Brightness 0-100"/>
+                <action_argument name="FadeTime" note="Fade duration"/>
+                <action_argument name="DelayTime" note="not used"/>
+                <action_argument name="bleColorRed" note="Red 0-255 (from color wheel)"/>
+                <action_argument name="bleColorGreen" note="Green 0-255"/>
+                <action_argument name="bleColorBlue" note="Blue 0-255"/>
+                <action_argument name="bleColorWhite" note="White 0-255"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/color</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
+                            <parameter parameter_data_type="character"><![CDATA[&r=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorRed"/>
+                            <parameter parameter_data_type="character"><![CDATA[&g=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorGreen"/>
+                            <parameter parameter_data_type="character"><![CDATA[&b=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorBlue"/>
+                            <parameter parameter_data_type="character"><![CDATA[&w=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="bleColorWhite"/>
+                            <parameter parameter_data_type="character"><![CDATA[&fade=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="FadeTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Keypad button actions -->
+            <action name="ButtonHold">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=hold]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ButtonPress">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=press]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ButtonRelease">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=release]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ButtonPressAndRelease">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=pressrelease]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Scene recall: GET /api/scene/recall?id={sceneId} -->
+            <action name="SceneRecall">
+                <action_argument name="Address1" note="LEAP Virtual Button ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/scene/recall</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- CCT action: GET /api/cct?id={zone}&level={0-100}&fade={fade} -->
+            <action name="CCTDimmerSet">
+                <action_argument name="Address1" note="LEAP Zone ID (Rania/tunable)"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="not used"/>
+                <action_argument name="Address4" note="not used"/>
+                <action_argument name="Address5" note="not used"/>
+                <action_argument name="Address6" note="not used"/>
+                <action_argument name="DimmerLevel" note="CCT 0-100 (0=warmest 1400K, 100=coolest 10000K)"/>
+                <action_argument name="FadeTime" note="not used"/>
+                <action_argument name="DelayTime" note="not used"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/cct</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="DimmerLevel"/>
+                            <parameter parameter_data_type="character"><![CDATA[&fade=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="FadeTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- QueryLED no-op (LED state not polled in HTTP mode) -->
+            <action name="QueryLED">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- ── Entities ──────────────────────────────────────────────────── -->
+
+            <entity name="Dimmer" address_components="1">
+                <query_status_with_action name="QueryDimmerLevel" period_ms="0">
+                </query_status_with_action>
+                <query_status_with_action name="QueryDimmerLevel" period_ms="5000">
+                </query_status_with_action>
+                <slider_representation>
+                    <press_action name="DimmerSet"></press_action>
+                    <valueSource name="DimmerLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="20"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="20"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="40"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="40"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="60"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="60"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="80"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="80"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                    <toggle_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></toggle_action>
+                    <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="AreaDimmer" address_components="1">
+                <slider_representation>
+                    <press_action name="RFDimmerSet"></press_action>
+                    <valueSource name="AreaDimmerLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="25"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="25"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="50"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="50"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="75"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="75"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                    <toggle_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></toggle_action>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Switch" address_components="1">
+                <query_status_with_action name="QueryDimmerLevel" period_ms="0">
+                </query_status_with_action>
+                <query_status_with_action name="QueryDimmerLevel" period_ms="5000">
+                </query_status_with_action>
+                <toggle_button_representation>
+                    <release_action name="SwitchOn"></release_action>
+                    <toggle_release_action name="SwitchOff"></toggle_release_action>
+                    <osd_press_action name="SwitchOn"></osd_press_action>
+                    <osd_hold_action name="SwitchOff"></osd_hold_action>
+                    <toggleOnUsingState name="DimmerLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </toggleOnUsingState>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Keypad Button" address_components="3">
+                <toggle_button_representation>
+                    <press_action name="ButtonPress"></press_action>
+                    <release_action name="ButtonRelease"></release_action>
+                    <toggle_action name="ButtonPress"></toggle_action>
+                    <toggle_release_action name="ButtonRelease"></toggle_release_action>
+                    <osd_press_action name="ButtonPressAndRelease"></osd_press_action>
+                    <osd_hold_action name="ButtonPressAndRelease"></osd_hold_action>
+                    <toggleOnUsingState name="IsCurrentLEDOn">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                        <unique_identifier name="LEDNumber" address_component="3"/>
+                    </toggleOnUsingState>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Button Press And Release" address_components="3">
+                <push_button_representation>
+                    <press_action name="ButtonPress"></press_action>
+                    <release_action name="ButtonRelease"></release_action>
+                    <osd_press_action name="ButtonPressAndRelease"></osd_press_action>
+                </push_button_representation>
+            </entity>
+
+            <entity name="Button Press, Hold, And Release" address_components="3">
+                <push_button_representation>
+                    <press_action name="ButtonPress"></press_action>
+                    <hold_action name="ButtonHold"></hold_action>
+                    <release_action name="ButtonRelease"></release_action>
+                </push_button_representation>
+            </entity>
+
+            <!-- DMX — test entity matching SIPA pattern: DimmerSet + CurrentColor valueSource.
+                 Tests whether Savant populates bleColor* args for DMX entity type. -->
+            <entity name="DMX" address_components="1">
+                <slider_representation>
+                    <press_action name="DimmerSet"/>
+                    <valueSource name="CurrentColor">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="25"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="25"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="50"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="50"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="75"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="75"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                        <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                    <toggle_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></toggle_action>
+                    <osd_press_action name="DimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    <osd_hold_action name="DimmerSet"><argument name="DimmerLevel" value="0"/></osd_hold_action>
+                </toggle_button_representation>
+            </entity>
+
+            <!-- Color Slider — opens Savant color wheel (Type RGBW). bleColorRed/Green/Blue/White
+                 are serialized as URL query params via HTTP GET (unlike TCP). -->
+            <entity name="Color Slider" address_components="1">
+                <slider_representation>
+                    <press_action name="RFDimmerSet"/>
+                    <valueSource name="ColorLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="25"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="25"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="50"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="50"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="75"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="75"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                        <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                    <toggle_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></toggle_action>
+                    <osd_press_action name="RFDimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    <osd_hold_action name="RFDimmerSet"><argument name="DimmerLevel" value="0"/></osd_hold_action>
+                </toggle_button_representation>
+            </entity>
+
+            <!-- CCT Slider — tunable white for Rania / warm-dim zones (Type WW). -->
+            <entity name="CCT Slider" address_components="1">
+                <slider_representation>
+                    <press_action name="CCTDimmerSet"/>
+                    <valueSource name="CCTLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="0"/></release_action>
+                        <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="25"/></release_action>
+                        <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="25"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="50"/></release_action>
+                        <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="50"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="75"/></release_action>
+                        <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="75"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                        <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="CCTDimmerSet"><argument name="DimmerLevel" value="100"/></release_action>
+                    <toggle_action name="CCTDimmerSet"><argument name="DimmerLevel" value="0"/></toggle_action>
+                    <osd_press_action name="CCTDimmerSet"><argument name="DimmerLevel" value="100"/></osd_press_action>
+                </toggle_button_representation>
+            </entity>
+
+        </resource_component_actions>
+
+        <!-- ═══════════════════════════════════════════════════════════════════
+             SHADE CONTROLLER
+             ═══════════════════════════════════════════════════════════════════ -->
+        <resource_component_actions resource_type="ENV_SHADECONTROLLER_SOURCE">
+
+            <action name="ShadeSet">
+                <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="not used"/>
+                <action_argument name="Address4" note="not used"/>
+                <action_argument name="Address5" note="not used"/>
+                <action_argument name="Address6" note="not used"/>
+                <action_argument name="ShadeLevel" note="Target level (0-100, 0=closed)"/>
+                <action_argument name="FadeTime" note="not used"/>
+                <action_argument name="DelayTime" note="Delay (0-99)"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/shade/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="ShadeLevel"/>
+                            <parameter parameter_data_type="character"><![CDATA[&delay=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="DelayTime"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ShadeIncrease">
+                <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/shade/raise</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ShadeDecrease">
+                <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/shade/lower</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ShadeStop">
+                <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/shade/stop</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="QueryShadeGroupLevel">
+                <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/shade/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Buttons also available in shade table -->
+            <action name="ButtonPress">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=press]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ButtonRelease">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=release]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ButtonPressAndRelease">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="Button Number"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/button</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&num=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address2"/>
+                            <parameter parameter_data_type="character"><![CDATA[&action=pressrelease]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="QueryLED">
+                <action_argument name="Address1" note="LEAP Device ID"/>
+                <action_argument name="Address2" note="not used"/>
+                <action_argument name="Address3" note="LED ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- ── Shade Entities ─────────────────────────────────────────── -->
+
+            <entity name="Variable Shade" address_components="1">
+                <slider_representation>
+                    <press_action name="ShadeSet"></press_action>
+                    <valueSource name="DimmerLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+                <group_representation>
+                    <push_button_representation>
+                        <release_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></release_action>
+                        <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="ShadeSet"><argument name="ShadeLevel" value="25"/></release_action>
+                        <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="25"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="ShadeSet"><argument name="ShadeLevel" value="50"/></release_action>
+                        <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="50"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="ShadeSet"><argument name="ShadeLevel" value="75"/></release_action>
+                        <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="75"/></osd_press_action>
+                    </push_button_representation>
+                    <push_button_representation>
+                        <release_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></release_action>
+                        <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></osd_press_action>
+                    </push_button_representation>
+                </group_representation>
+                <toggle_button_representation>
+                    <release_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></release_action>
+                    <toggle_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></toggle_action>
+                    <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></osd_press_action>
+                    <osd_hold_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></osd_hold_action>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Shade" address_components="1">
+                <toggle_button_representation>
+                    <release_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></release_action>
+                    <toggle_release_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></toggle_release_action>
+                    <toggleOnUsingState name="DimmerLevel">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </toggleOnUsingState>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Keypad Button" address_components="3">
+                <toggle_button_representation>
+                    <press_action name="ButtonPress"></press_action>
+                    <release_action name="ButtonRelease"></release_action>
+                    <toggle_action name="ButtonPress"></toggle_action>
+                    <toggle_release_action name="ButtonRelease"></toggle_release_action>
+                    <osd_press_action name="ButtonPressAndRelease"></osd_press_action>
+                    <osd_hold_action name="ButtonPressAndRelease"></osd_hold_action>
+                    <toggleOnUsingState name="IsCurrentLEDOn">
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                        <unique_identifier name="LEDNumber" address_component="3"/>
+                    </toggleOnUsingState>
+                </toggle_button_representation>
+            </entity>
+
+            <entity name="Button Press And Release" address_components="3">
+                <push_button_representation>
+                    <press_action name="ButtonPress"></press_action>
+                    <release_action name="ButtonRelease"></release_action>
+                    <osd_press_action name="ButtonPressAndRelease"></osd_press_action>
+                </push_button_representation>
+            </entity>
+
+        </resource_component_actions>
+
+        <!-- ═══════════════════════════════════════════════════════════════════
+             FAN CONTROLLER
+             ═══════════════════════════════════════════════════════════════════ -->
+        <resource_component_actions resource_type="ENV_FANCONTROLLER_SOURCE">
+
+            <action name="FanSet">
+                <action_argument name="Address1" note="LEAP Zone ID (fan)"/>
+                <action_argument name="Address2" note="enter 1"/>
+                <action_argument name="FanSpeed" note="0=Off, 1=Low, 2=Med, 3=High"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/zone/level</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&level=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="FanSet_*" wildcard_source="action_argument" wildcard_source_name="FanSpeed"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <entity name="Fan" address_components="2">
+                <slider_representation>
+                    <press_action name="FanSet"></press_action>
+                    <valueSource name="CurrentFanStatus">
+                        <unique_identifier name="Needed" address_component="2"/>
+                        <unique_identifier name="DeviceID" address_component="1"/>
+                    </valueSource>
+                </slider_representation>
+            </entity>
+
+        </resource_component_actions>
+
+        <!-- ═══════════════════════════════════════════════════════════════════
+             HVAC CONTROLLER (Palladiom Thermostat)
+             Address1 = LEAP HVAC Controller ID (from web UI Thermostats tab)
+             ═══════════════════════════════════════════════════════════════════ -->
+        <resource_component_actions resource_type="ENV_HVACCONTROLLER_SOURCE">
+
+            <action name="ThermostatSetHeatPoint">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <action_argument name="ThermostatHeatSetPoint" note="Heat setpoint in °F"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/hvac/heat</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&setpoint=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="ThermostatHeatSetPoint"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatSetCoolPoint">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <action_argument name="ThermostatCoolSetPoint" note="Cool setpoint in °F"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/hvac/cool</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                            <parameter parameter_data_type="character"><![CDATA[&setpoint=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="ThermostatCoolSetPoint"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatModeSetHeat">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Heat]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatModeSetCool">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Cool]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatModeSetAuto">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Auto]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatModeSetOff">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Off]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatFanModeSetAuto">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Auto]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatFanModeSetOn">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/fan?mode=On]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatFanModeSetHigh">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/fan?mode=High]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatFanModeSetMedium">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Medium]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="ThermostatFanModeSetLow">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Low]]></command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
+            <action name="QueryHVACStatus">
+                <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
+                <command_interface interface="ip">
+                    <command response_required="yes" http_request_type="GET">
+                        <command_string type="character">api/hvac/status</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                        <response_codes>
+                            <rspmessage status="success" name="HVACStatus">
+                                <constant type="character">200</constant>
+                                <root_object name="none" matches_required="at_least_one" format="json">
+                                    <values path="/none/temperature" matches_required="at_least_one">
+                                        <update state="ThermostatCurrentTemperature" type="string"></update>
+                                    </values>
+                                    <values path="/none/heatSetpoint" matches_required="at_least_one">
+                                        <update state="ThermostatCurrentHeatPoint" type="string"></update>
+                                    </values>
+                                    <values path="/none/coolSetpoint" matches_required="at_least_one">
+                                        <update state="ThermostatCurrentCoolPoint" type="string"></update>
+                                    </values>
+                                    <values path="/none/mode" matches_required="at_least_one">
+                                        <value_map match_required="no">
+                                            <map key="Heat">
+                                                <update state="ThermostatMode" type="string">Heat</update>
+                                                <update state="IsCurrentHVACModeHeat" type="boolean">true</update>
+                                                <update state="IsCurrentHVACModeCool" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeAuto" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeOff" type="boolean">false</update>
+                                            </map>
+                                            <map key="Cool">
+                                                <update state="ThermostatMode" type="string">Cool</update>
+                                                <update state="IsCurrentHVACModeHeat" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeCool" type="boolean">true</update>
+                                                <update state="IsCurrentHVACModeAuto" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeOff" type="boolean">false</update>
+                                            </map>
+                                            <map key="Auto">
+                                                <update state="ThermostatMode" type="string">Auto</update>
+                                                <update state="IsCurrentHVACModeHeat" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeCool" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeAuto" type="boolean">true</update>
+                                                <update state="IsCurrentHVACModeOff" type="boolean">false</update>
+                                            </map>
+                                            <map key="Off">
+                                                <update state="ThermostatMode" type="string">Off</update>
+                                                <update state="IsCurrentHVACModeHeat" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeCool" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeAuto" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeOff" type="boolean">true</update>
+                                            </map>
+                                            <map key="EmergencyHeat">
+                                                <update state="ThermostatMode" type="string">EmergencyHeat</update>
+                                                <update state="IsCurrentHVACModeHeat" type="boolean">true</update>
+                                                <update state="IsCurrentHVACModeCool" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeAuto" type="boolean">false</update>
+                                                <update state="IsCurrentHVACModeOff" type="boolean">false</update>
+                                            </map>
+                                        </value_map>
+                                    </values>
+                                    <values path="/none/fanMode" matches_required="at_least_one">
+                                        <value_map match_required="no">
+                                            <map key="Auto">
+                                                <update state="ThermostatFanMode" type="string">Auto</update>
+                                                <update state="IsThermostatCurrentFanModeAuto" type="boolean">true</update>
+                                                <update state="IsThermostatCurrentFanModeOn" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeHigh" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeMedium" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeLow" type="boolean">false</update>
+                                            </map>
+                                            <map key="On">
+                                                <update state="ThermostatFanMode" type="string">On</update>
+                                                <update state="IsThermostatCurrentFanModeAuto" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeOn" type="boolean">true</update>
+                                                <update state="IsThermostatCurrentFanModeHigh" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeMedium" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeLow" type="boolean">false</update>
+                                            </map>
+                                            <map key="High">
+                                                <update state="ThermostatFanMode" type="string">High</update>
+                                                <update state="IsThermostatCurrentFanModeAuto" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeOn" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeHigh" type="boolean">true</update>
+                                                <update state="IsThermostatCurrentFanModeMedium" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeLow" type="boolean">false</update>
+                                            </map>
+                                            <map key="Medium">
+                                                <update state="ThermostatFanMode" type="string">Medium</update>
+                                                <update state="IsThermostatCurrentFanModeAuto" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeOn" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeHigh" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeMedium" type="boolean">true</update>
+                                                <update state="IsThermostatCurrentFanModeLow" type="boolean">false</update>
+                                            </map>
+                                            <map key="Low">
+                                                <update state="ThermostatFanMode" type="string">Low</update>
+                                                <update state="IsThermostatCurrentFanModeAuto" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeOn" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeHigh" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeMedium" type="boolean">false</update>
+                                                <update state="IsThermostatCurrentFanModeLow" type="boolean">true</update>
+                                            </map>
+                                        </value_map>
+                                    </values>
+                                </root_object>
+                            </rspmessage>
+                        </response_codes>
+                    </command>
+                </command_interface>
+            </action>
+
+            <entity name="Thermostat" address_components="1">
+                <screen_representation>
+                    <common_unique_identifier name="ThermostatID" address_component="1"/>
+                </screen_representation>
+                <query_status_with_action name="QueryHVACStatus" period_ms="0">
+                    <with_arg name="Address1" address_component="1"/>
+                </query_status_with_action>
+                <query_status_with_action name="QueryHVACStatus" period_ms="30000">
+                    <with_arg name="Address1" address_component="1"/>
+                </query_status_with_action>
+            </entity>
+
+        </resource_component_actions>
+
+    </logical_component>
+
+</component>

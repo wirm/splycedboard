@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd"
+    manufacturer="Apple"
+    model="Apple TV (SplycedBoard)"
+    alias="A1625, A1842, A2169, A2737, A2843"
+    device_class="Media_server"
+    minimum_component_engine_version="9.1"
+    rpm_xml_version="1.1">
+    <notes>
+        Apple TV IP control through SplycedBoard. Uses Apple's Companion protocol (the
+        protocol the iPhone Remote uses, paired with a PIN shown on the TV) — no HomeKit,
+        no IR, no Savant coprocessor.
+
+        One component per Apple TV. A house can have as many as it needs; each one is
+        addressed by its own IP.
+
+        Setup, for each Apple TV:
+        1. Give the Apple TV a fixed IP address (a DHCP reservation).
+        2. Open the SplycedBoard dashboard (http://PRO-HOST-IP:47200) → Apple TV → pair it
+           using the 4-digit PIN shown on the TV.
+        3. In Blueprint, add this component and set its IP address to 127.0.0.1 —
+           SplycedBoard runs on the Pro Host and does the Apple encryption. Port 47200.
+        4. Inspect the component → Show → State Variables, and set AppleTVAddress to this
+           Apple TV's IP address (the same address it was paired with).
+
+        State variables:
+          AppleTVAddress    (set in Blueprint) which Apple TV this component controls
+          AppleTVPower      ON / OFF / UNKNOWN — reported by the Apple TV
+          AppleTVPlaying    true while something is playing
+          AppleTVConnected  true while SplycedBoard has a live connection to it
+
+        The Savant app shows its standard Apple TV remote. Extra actions (PlayPause, skips,
+        volume, app switcher…) are custom actions for Blueprint buttons and workflows.
+
+        Commands SplycedBoard accepts (api/appletv/cmd?ip=…&amp;cmd=…) beyond the actions
+        below: up, down, left, right, select, menu, home, playpause, play, pause, stop,
+        next, previous, skipforward, skipbackward, volumeup, volumedown, poweron, poweroff,
+        powertoggle, siri, screensaver, channelup, channeldown, guide, pageup, pagedown —
+        with &amp;action=press (default), hold or double.
+
+        ====================== Change Log ======================
+        Version 1.1  Extras moved to custom actions (Savant only routes the remote's own
+                     actions to this resource); standard Apple TV remote UI.
+        Version 1.0  Initial release.
+    </notes>
+    <component_properties>
+        <custom_properties>
+            <property name="hasOSD">true</property>
+            <property name="defaultDisableOSD">true</property>
+        </custom_properties>
+    </component_properties>
+    <control_interfaces preferred="ip">
+        <ip port="47200" response_time_length_ms="3000" name_on_component="Ethernet" protocol="http">
+        </ip>
+    </control_interfaces>
+    <media_interfaces>
+        <output name_on_component="HDMI">
+            <combined_media>
+                <audio_media type="hdmi_audio"/>
+                <video_media type="hdmi"/>
+            </combined_media>
+            <resource resource_type="AV_APPLEREMOTEMEDIASERVER_SOURCE"/>
+        </output>
+        <data name_on_component="Ethernet">
+            <combined_media>
+                <data_media type="ethernet"/>
+                <control port="47200"/>
+            </combined_media>
+        </data>
+    </media_interfaces>
+    <state_variable_list>
+        <state_variable name="AppleTVAddress" owning_logical_component="Media_server" user_editable="yes" state_center_binding="AppleTVAddress" state_center_type="string" note="IP address of this Apple TV, as paired in SplycedBoard"></state_variable>
+        <state_variable name="Power_current_power_setting" owning_logical_component="Media_server" state_center_binding="CurrentPowerStatus" state_center_type="string">OFF</state_variable>
+        <state_variable name="AppleTVPower" owning_logical_component="Media_server" state_center_binding="AppleTVPower" state_center_type="string">UNKNOWN</state_variable>
+        <state_variable name="AppleTVPlaying" owning_logical_component="Media_server" state_center_binding="AppleTVPlaying" state_center_type="boolean">false</state_variable>
+        <state_variable name="AppleTVConnected" owning_logical_component="Media_server" state_center_binding="AppleTVConnected" state_center_type="boolean">false</state_variable>
+    </state_variable_list>
+    <logical_component logical_component_name="Media_server">
+        <implementation>
+            <output name_on_component="HDMI"></output>
+        </implementation>
+
+        <!-- Power always sends (no "already on" check): the Apple TV's sleep timer can turn
+             it off without Savant knowing, and waking an awake Apple TV is harmless. -->
+        <universal_component_actions>
+            <action name="PowerOn">
+                <update_state_variable name="Power_current_power_setting" update_type="set" update_source="constant">ON</update_state_variable>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=poweron]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="PowerOff">
+                <update_state_variable name="Power_current_power_setting" update_type="set" update_source="constant">OFF</update_state_variable>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=poweroff]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+        </universal_component_actions>
+
+        <resource_component_actions resource_type="AV_APPLEREMOTEMEDIASERVER_SOURCE" control_restriction="ip">
+            <!-- Sent when a held button is released; every press is already complete -->
+            <action name="RepeatStop">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=release]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="Select">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=select]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="OSDCursorUp">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=up]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="OSDCursorDown">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=down]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="OSDCursorLeft">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=left]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="OSDCursorRight">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=right]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Back -->
+            <action name="Menu">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=menu]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="Home">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=home]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="CommandPlay">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=play]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="CommandPause">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=pause]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Launch an app by bundle id — the Apple TV page on the SplycedBoard dashboard lists them -->
+            <action name="LaunchApp">
+                <action_argument name="AppID" note="App bundle id, e.g. com.netflix.Netflix"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/app</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="AppID"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Pairing from Savant (the SplycedBoard dashboard is the easier way): the TV shows a PIN -->
+            <action name="PairStart">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/pair/start</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="PairSubmitPin">
+                <action_argument name="PIN" note="4-digit PIN shown on the TV"/>
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/pair/finish</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&pin=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="PIN"/>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+        </resource_component_actions>
+
+        <custom_component_actions>
+            <!-- Not sent by the Savant remote UI; use these from Blueprint buttons and workflows. -->
+            <action name="PlayPause">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=playpause]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="CommandStop">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=stop]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Next track / episode, where the app supports it -->
+            <action name="CommandSkipUp">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=next]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="CommandSkipDown">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=previous]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Jump 10 seconds -->
+            <action name="CommandScanUp">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=skipforward]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="CommandScanDown">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=skipbackward]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Volume goes to the TV/receiver via HDMI-CEC or IR, as set on the Apple TV -->
+            <action name="VolumeUp">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=volumeup]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="VolumeDown">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=volumedown]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="AppSwitcher">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=home&action=double]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="ControlCenter">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=home&action=hold]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="Screensaver">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=screensaver]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <!-- Live TV apps -->
+            <action name="ChannelUp">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=channelup]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="ChannelDown">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=channeldown]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+            <action name="Guide">
+                <command_interface interface="ip">
+                    <command response_required="no" http_request_type="GET">
+                        <command_string type="character">api/appletv/cmd</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                            <parameter parameter_data_type="character"><![CDATA[&cmd=guide]]></parameter>
+                        </parameter_list>
+                        <delay ms_delay="100"/>
+                    </command>
+                </command_interface>
+            </action>
+
+            <!-- Feedback: polled at startup and every 5 seconds. SplycedBoard answers from
+                 state it already holds, so polling never waits on the Apple TV. -->
+            <action name="QueryStatus">
+                <command_interface interface="ip">
+                    <command response_required="yes" http_request_type="GET">
+                        <command_string type="character">api/appletv/status</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?ip=]]></parameter>
+                            <parameter parameter_data_type="character" state_variable="AppleTVAddress"/>
+                        </parameter_list>
+                        <response_codes>
+                            <rspmessage status="success" name="AppleTVStatus">
+                                <constant type="character">200</constant>
+                                <root_object name="none" matches_required="at_least_one" format="json">
+                                    <values path="/none/power" matches_required="at_least_one">
+                                        <update state="AppleTVPower" type="string"></update>
+                                    </values>
+                                    <values path="/none/playing" matches_required="none">
+                                        <update state="AppleTVPlaying" type="boolean"></update>
+                                    </values>
+                                    <values path="/none/connected" matches_required="none">
+                                        <update state="AppleTVConnected" type="boolean"></update>
+                                    </values>
+                                </root_object>
+                            </rspmessage>
+                        </response_codes>
+                    </command>
+                </command_interface>
+                <execute_on_schedule period_ms="0"/>
+                <execute_on_schedule period_ms="5000"/>
+            </action>
+        </custom_component_actions>
+    </logical_component>
+</component>

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Follow the SplycedBoard log. `scripts/logs errors` shows only warnings and errors.
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+LOG="$LOG_DIR/splycedboard.log"
+[ -f "$LOG" ] || { fail "No log yet at $LOG"; exit 1; }
+echo "── $LOG (Ctrl-C to stop) ──"
+if [ "${1:-}" = errors ]; then
+  tail -n 200 -f "$LOG" | grep --line-buffered -E ' (WARN|ERROR) '
+else
+  tail -n 100 -f "$LOG"
+fi

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Run SplycedBoard in this terminal from this folder, with live logs — for testing
+# changes before installing them. Uses the same settings and pairing as the service.
+# Ctrl-C to stop.
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+find_runtime || { fail "Needs Bun or Node.js 18+ — run ./install first."; exit 1; }
+# Dependencies may live in this folder (installed copy) or a parent (development workspace).
+if ! (cd "$ROOT" && "$RUNTIME" -e "require.resolve('express')") >/dev/null 2>&1; then
+  step "Installing dependencies"
+  if [ "$RUNTIME_KIND" = bun ]; then (cd "$ROOT" && "$RUNTIME" install); else (cd "$ROOT" && npm install); fi
+fi
+
+if svc_loaded "$LABEL"; then
+  warn "The background service is running and holds the same ports."
+  read -r -p "  Stop it while you test? It restarts at next login or with scripts/start. [Y/n] " reply </dev/tty
+  [[ "$reply" =~ ^[Nn] ]] && exit 1
+  svc_stop "$LABEL" "$PLIST" && ok "Service stopped"
+fi
+
+echo
+echo "  SplycedBoard (dev) · $RUNTIME_KIND · http://localhost:$WEB_PORT · Ctrl-C to stop"
+echo
+cd "$ROOT" && exec "$RUNTIME" src/index.js

@@ -1,0 +1,22 @@
+{
+  "id": "lutron",
+  "name": "Lutron LEAP",
+  "icon": "💡",
+  "description": "Controls Lutron HomeWorks QSX and RadioRA 3 lighting, shades, keypads and Palladiom thermostats from Savant over the LEAP protocol.",
+  "profile": "lutron_leap_bridge.xml",
+  "defaultEnabled": true,
+  "legacyApiRoot": true,
+  "endpoints": [
+    {
+      "port": 47200,
+      "protocol": "HTTP",
+      "path": "/api/lutron",
+      "use": "Savant profile commands and status polling"
+    },
+    {
+      "port": 8023,
+      "protocol": "TCP",
+      "use": "HomeWorks QS–style telnet with push feedback"
+    }
+  ]
+}

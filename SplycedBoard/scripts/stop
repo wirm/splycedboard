@@ -1,0 +1,5 @@
+#!/bin/bash
+# Stop the SplycedBoard background service until the next login (or ./scripts/start).
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+if ! svc_loaded "$LABEL"; then ok "Not running"; exit 0; fi
+svc_stop "$LABEL" "$PLIST" && ok "Stopped" || { fail "Still running after 10s"; exit 1; }

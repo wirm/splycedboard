@@ -1,0 +1,20 @@
+{
+  "id": "scli",
+  "name": "SCLI Bridge",
+  "icon": "🔌",
+  "description": "Lets other devices read and write Savant state and send service requests through sclibridge (readstate, writestate, servicerequest…) on the Pro Host.",
+  "profile": "ip_requests.xml",
+  "defaultEnabled": true,
+  "endpoints": [
+    {
+      "port": 12000,
+      "protocol": "TCP / HTTP GET",
+      "use": "Clients send sclibridge commands"
+    },
+    {
+      "port": 12001,
+      "protocol": "TCP",
+      "use": "Savant host connects here (IP Requests profile)"
+    }
+  ]
+}

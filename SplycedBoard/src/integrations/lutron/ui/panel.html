@@ -1,0 +1,215 @@
+<div class="panel-header">
+  <div>
+    <div class="panel-title">Lutron LEAP</div>
+    <div class="panel-subtitle">HomeWorks QSX · RadioRA 3</div>
+  </div>
+  <div class="status-badge">
+    <div class="status-dot" id="ltStatusDot"></div>
+    <span id="ltStatusText">Not connected</span>
+  </div>
+</div>
+
+<nav class="subnav">
+  <button class="tab-btn active" data-tab="setup">Setup</button>
+  <button class="tab-btn" data-tab="loads">Loads</button>
+  <button class="tab-btn" data-tab="thermostats">Thermostats</button>
+  <button class="tab-btn" data-tab="keypads">Keypads</button>
+  <button class="tab-btn" data-tab="scenes">Scenes</button>
+</nav>
+
+<!-- ═══════════════════════════════ SETUP ═══════════════════════════════════ -->
+<div class="tab-pane active" data-pane="setup">
+
+  <div class="info-row" id="bridgeInfo" style="display:none">
+    <div class="info-chip">Telnet bridge port: <strong id="bridgePortChip">8023</strong></div>
+    <div class="info-chip">Savant HTTP port: <strong id="webPortChip">47200</strong></div>
+    <div class="info-chip" id="pairedChip"></div>
+  </div>
+
+  <div class="setup-columns">
+
+    <!-- Discovery -->
+    <div>
+      <div class="card">
+        <div class="card-title">1 · Discover Processors</div>
+
+        <div class="alert alert-info show">
+          Scans your local network for Lutron QSX / RA3 processors via mDNS.
+          Ensure the processor is powered on and on the same network.
+        </div>
+
+        <button class="btn btn-primary" id="discoverBtn" onclick="Lutron.startDiscovery()">
+          <span>🔍</span> Scan Network
+        </button>
+
+        <div id="processorList" style="margin-top:16px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Manual Entry</div>
+        <div class="form-group">
+          <label for="manualHost">Processor IP Address</label>
+          <input type="text" id="manualHost" placeholder="192.168.1.x">
+        </div>
+        <div class="form-group">
+          <label for="manualName">Display Name (optional)</label>
+          <input type="text" id="manualName" placeholder="Main House QSX">
+        </div>
+        <button class="btn btn-secondary" onclick="Lutron.selectManual()">Use This Address</button>
+      </div>
+    </div>
+
+    <!-- Pairing -->
+    <div>
+      <div class="card">
+        <div class="card-title">2 · Pair with Processor</div>
+
+        <div class="pairing-info">
+          <strong>Before pairing:</strong> In Lutron HomeWorks Designer, ensure
+          <strong>LEAP</strong> integration is enabled and a pairing button has been
+          configured on a keypad, or press the physical pairing button on the processor.
+          You have ~30 seconds after enabling pairing mode.
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-num" id="step1Num">1</div>
+            <div class="step-text"><strong>Select a processor</strong> from the list on the left</div>
+          </div>
+          <div class="step">
+            <div class="step-num" id="step2Num">2</div>
+            <div class="step-text"><strong>Enable pairing mode</strong> on the processor (press pairing button or use Lutron software)</div>
+          </div>
+          <div class="step">
+            <div class="step-num" id="step3Num">3</div>
+            <div class="step-text"><strong>Click Pair</strong> within 30 seconds of enabling pairing mode</div>
+          </div>
+        </div>
+
+        <div class="alert" id="pairAlert"></div>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <button class="btn btn-primary" id="pairBtn" onclick="Lutron.startPairing()" disabled>
+            <span>🔐</span> Pair Now
+          </button>
+          <span id="selectedHost" style="font-size:13px; color:var(--muted)">No processor selected</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Connection Status</div>
+        <div id="connectionStatus" style="font-size:13px; color:var(--muted)">Not connected</div>
+        <button class="btn btn-secondary" style="margin-top:12px" onclick="Lutron.reconnect()">Reconnect</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Blueprint Settings</div>
+        <div class="pairing-info">
+          <strong>Component Name:</strong> The name Blueprint assigned to this bridge when you imported the profile.
+          Used when generating the lighting export plist.
+        </div>
+        <div class="form-group">
+          <label for="componentNameInput">Blueprint Component Name</label>
+          <input type="text" id="componentNameInput" placeholder="e.g. LutronLeapBridge">
+        </div>
+        <button class="btn btn-secondary" onclick="Lutron.saveComponentName()">Save</button>
+        <span id="componentNameSaved" style="font-size:12px;color:var(--green);margin-left:10px;display:none">Saved ✓</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ LOADS ═══════════════════════════════════ -->
+<div class="tab-pane" data-pane="loads">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; gap:12px; flex-wrap:wrap">
+    <div class="search-wrap" style="flex:1; min-width:200px; max-width:320px; margin:0">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="zoneSearch" placeholder="Search zones…" aria-label="Search zones">
+      <button id="zoneSearchClear" onclick="Lutron.clearZoneSearch()" aria-label="Clear search"
+        style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px">×</button>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.refreshInventory()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.exportLighting()" title="Download Savant lighting_export.plist">⬇ Export</button>
+    </div>
+  </div>
+
+  <div class="type-filter">
+    <button class="type-filter-btn active" onclick="Lutron.setTypeFilter('all')" data-filter="all">All</button>
+    <button class="type-filter-btn" onclick="Lutron.setTypeFilter('lights')" data-filter="lights">Lights</button>
+    <button class="type-filter-btn" onclick="Lutron.setTypeFilter('shades')" data-filter="shades">Shades</button>
+  </div>
+
+  <div id="loadsContent">
+    <div class="empty-state">
+      <div class="empty-icon">💡</div>
+      <div class="empty-title">No Loads</div>
+      <div class="empty-desc">Connect to a Lutron processor to see lighting loads</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ THERMOSTATS ══════════════════════════════ -->
+<div class="tab-pane" data-pane="thermostats">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px">
+    <p style="font-size:13px;color:var(--muted)">Palladiom thermostats discovered on the LEAP processor.</p>
+    <button class="btn btn-ghost btn-sm" onclick="Lutron.refreshInventory()">↻ Refresh</button>
+  </div>
+  <div id="thermostatsContent">
+    <div class="empty-state">
+      <div class="empty-icon">🌡️</div>
+      <div class="empty-title">No Thermostats</div>
+      <div class="empty-desc">Connect to a Lutron processor to see thermostats</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ KEYPADS ═════════════════════════════════ -->
+<div class="tab-pane" data-pane="keypads">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:12px">
+    <div class="search-wrap" style="flex:1; max-width:320px; margin:0">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="keypadSearch" placeholder="Search keypads…" aria-label="Search keypads">
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="Lutron.refreshInventory()">↻ Refresh</button>
+  </div>
+
+  <div id="keypadsContent">
+    <div class="empty-state">
+      <div class="empty-icon">⌨️</div>
+      <div class="empty-title">No Keypads</div>
+      <div class="empty-desc">Connect to a Lutron processor to see keypads</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SCENES ══════════════════════════════════ -->
+<div class="tab-pane" data-pane="scenes">
+  <div style="margin-bottom:20px">
+    <p style="font-size:13px; color:var(--muted)">Virtual buttons / scenes programmed in the Lutron processor.</p>
+  </div>
+
+  <div id="scenesContent">
+    <div class="empty-state">
+      <div class="empty-icon">🎬</div>
+      <div class="empty-title">No Scenes</div>
+      <div class="empty-desc">Connect to a Lutron processor to see virtual buttons</div>
+    </div>
+  </div>
+</div>
+
+<!-- Color / tuning modal -->
+<div class="modal-overlay" id="colorModal" onclick="if (event.target === this) Lutron.closeColorModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="colorModalName">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-title" id="colorModalName">Light</div>
+        <div class="modal-subtitle" id="colorModalArea"></div>
+      </div>
+      <button class="modal-close" onclick="Lutron.closeColorModal()" aria-label="Close">✕</button>
+    </div>
+    <div id="colorModalContent"></div>
+  </div>
+</div>

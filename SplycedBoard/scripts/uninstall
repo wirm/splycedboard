@@ -1,0 +1,41 @@
+#!/bin/bash
+# Remove SplycedBoard: stops the service, removes it from login, and deletes the files.
+# You choose whether to keep settings and Lutron pairing for a later reinstall.
+set -u
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+for arg in "$@"; do [ "$arg" = --headless ] && SB_HEADLESS=1; done
+detect_gui
+
+ask_yes "Uninstall SplycedBoard?
+
+Its background service stops and it's removed from this Mac. Savant loses every SplycedBoard integration until it's reinstalled." "Uninstall" || { echo "Cancelled."; exit 0; }
+
+KEEP_DATA=1
+[ "$(ask_button "Keep settings and Lutron pairing for a later reinstall?
+
+They're in $DATA_DIR" "Delete Everything" "Keep Settings")" = "Delete Everything" ] && KEEP_DATA=0
+
+step "Removing SplycedBoard"
+svc_stop "$LABEL" "$PLIST" || warn "Service took a while to stop"
+rm -f "$PLIST" && ok "Removed from login items (launchd)"
+
+if [ -L "$DESKTOP_LINK" ]; then rm -f "$DESKTOP_LINK" && ok "Removed Desktop link"; fi
+
+# Only ever delete a folder that is recognisably a SplycedBoard install.
+if [ -d "$INSTALL_DIR" ] && ! grep -q '"name": "splycedboard"' "$INSTALL_DIR/package.json" 2>/dev/null; then
+  fail "$INSTALL_DIR doesn't look like a SplycedBoard install — not deleting it."
+  exit 1
+fi
+
+if [ -d "$INSTALL_DIR" ]; then
+  if [ "$KEEP_DATA" = 1 ]; then
+    find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name data -exec rm -rf {} +
+    ok "Removed files — kept settings in $DATA_DIR"
+  else
+    rm -rf "$INSTALL_DIR"
+    ok "Removed $INSTALL_DIR"
+  fi
+fi
+
+echo
+ok "SplycedBoard is uninstalled."

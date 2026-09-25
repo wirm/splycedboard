@@ -1,0 +1,14 @@
+{
+  "name": "splycedboard-dev",
+  "private": true,
+  "description": "Development workspace for SplycedBoard. The product itself is the SplycedBoard/ folder.",
+  "workspaces": [
+    "SplycedBoard"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "fast-srp-hap": "^2.0.4"
+  }
+}

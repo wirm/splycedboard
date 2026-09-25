@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplycedBoard</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="menu-btn" id="menuBtn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">☰</button>
+    <a class="logo" href="#/">
+      <div class="logo-icon">S</div>
+      <span>SplycedBoard</span>
+    </a>
+  </div>
+  <div class="topbar-right">
+    <span class="host-chip" id="hostChip"></span>
+    <div class="status-badge" title="Live connection to the SplycedBoard service">
+      <div class="status-dot" id="wsDot"></div>
+      <span id="wsText">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Main">
+    <div class="nav-label">Hub</div>
+    <a class="nav-item" href="#/" data-route="overview"><span class="nav-icon">▦</span>Overview</a>
+
+    <div class="nav-label">Integrations</div>
+    <div id="navIntegrations"></div>
+
+    <div class="nav-label">System</div>
+    <a class="nav-item" href="#/logs" data-route="logs"><span class="nav-icon">≡</span>Logs</a>
+    <a class="nav-item" href="#/settings" data-route="settings"><span class="nav-icon">⚙︎</span>Settings</a>
+  </nav>
+
+  <main id="main">
+
+    <!-- ═══════════════════════════════ OVERVIEW ═══════════════════════════════ -->
+    <section class="page" id="page-overview">
+      <div class="page-body">
+        <div class="page-head">
+          <h1>Integrations</h1>
+          <p>Each integration connects one outside system to Savant. Switch them on or off here —
+            changes take effect immediately, no restart needed.</p>
+        </div>
+
+        <div class="integration-grid" id="integrationCards">
+          <div class="loader"><div class="spinner"></div> Loading…</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Connecting an integration to Savant</div>
+          <ol class="steps-list">
+            <li><div><strong>Download the Savant profile</strong> from the integration's card and copy it into
+              <code>~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/</code>
+              on the Mac that runs Blueprint. Restart Blueprint.</div></li>
+            <li><div><strong>Add the component</strong> in Blueprint and set its address to <code>127.0.0.1</code>
+              (SplycedBoard runs on the Pro Host itself). HTTP profiles use port <code id="stepsPort">47200</code>.</div></li>
+            <li><div><strong>Fill in the data tables</strong> using the IDs shown in the integration's panel, then upload the configuration to the host.</div></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ LOGS ═══════════════════════════════════ -->
+    <section class="page" id="page-logs">
+      <div class="page-body">
+        <div class="log-toolbar">
+          <select id="logSource" aria-label="Source"><option value="">All sources</option></select>
+          <select id="logLevel" aria-label="Minimum level">
+            <option value="debug">Debug and up</option>
+            <option value="info" selected>Info and up</option>
+            <option value="warn">Warnings and errors</option>
+            <option value="error">Errors only</option>
+          </select>
+          <input type="search" id="logSearch" placeholder="Filter…" aria-label="Filter log lines">
+          <button class="btn btn-ghost btn-sm" id="logPause">Pause</button>
+          <button class="btn btn-ghost btn-sm" id="logDownload">Download</button>
+        </div>
+        <div class="log-view" id="logView" role="log" aria-live="off"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ SETTINGS ═══════════════════════════════ -->
+    <section class="page" id="page-settings">
+      <div class="page-body">
+        <div class="page-head"><h1>Settings</h1></div>
+
+        <div class="two-col">
+          <div>
+            <div class="card">
+              <div class="card-title">Service</div>
+              <dl class="kv" id="serviceInfo"></dl>
+              <div class="divider"></div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-name">Restart SplycedBoard</div>
+                  <div class="setting-desc" id="restartDesc">Stops every integration and starts the service again.</div>
+                </div>
+                <button class="btn btn-danger btn-sm" id="restartBtn">Restart</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Logging</div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-name">Verbose logging</div>
+                  <div class="setting-desc">Log every command to and from Savant and the connected systems.
+                    Useful while commissioning; turn off once the system is stable.</div>
+                </div>
+                <label class="toggle" aria-label="Verbose logging">
+                  <input type="checkbox" id="verboseToggle">
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-title">Open the dashboard from another device</div>
+              <div id="dashboardUrls" class="info-row" style="margin-bottom:0"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Folders</div>
+              <dl class="kv" id="folderInfo"></dl>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Savant profiles</div>
+              <div id="profileList" style="display:flex;flex-direction:column;gap:10px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast-stack" id="toasts" aria-live="polite"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

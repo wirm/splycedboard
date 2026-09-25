@@ -1,0 +1,112 @@
+<div class="panel-header">
+  <div>
+    <div class="panel-title">Apple TV</div>
+    <div class="panel-subtitle">IP control over Apple's Companion protocol · PIN pairing, no HomeKit</div>
+  </div>
+  <button class="btn btn-primary btn-sm" onclick="AppleTv.openAdd()">＋ Add Apple TV</button>
+</div>
+
+<div class="tab-pane active">
+  <div id="atvDevices" class="atv-grid">
+    <div class="loader"><div class="spinner"></div> Loading…</div>
+  </div>
+
+  <div class="card" style="margin-top:8px">
+    <div class="card-title">Connecting an Apple TV to Savant</div>
+    <ol class="steps-list">
+      <li><div><strong>Give each Apple TV a fixed IP</strong> (a DHCP reservation), then pair it here with <em>Add Apple TV</em>.</div></li>
+      <li><div><strong>In Blueprint, add one <code>Apple TV (SplycedBoard)</code> component per Apple TV</strong>
+        (<a href="/api/hub/integrations/appletv/profile" download>download the profile</a>) and set its IP address to
+        <code>127.0.0.1</code>, port <code>47200</code> — SplycedBoard runs on the Pro Host.</div></li>
+      <li><div><strong>Inspect the component → Show → State Variables</strong> and set <code>AppleTVAddress</code> to that
+        Apple TV's IP, as shown on its card above.</div></li>
+    </ol>
+  </div>
+</div>
+
+<!-- Add / pair -->
+<div class="modal-overlay" id="atvAddModal" onclick="if (event.target === this) AppleTv.closeAdd()">
+  <div class="modal atv-modal" role="dialog" aria-modal="true" aria-labelledby="atvAddTitle">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-title" id="atvAddTitle">Add an Apple TV</div>
+        <div class="modal-subtitle" id="atvAddSubtitle">Pick one found on the network, or enter its IP address</div>
+      </div>
+      <button class="modal-close" onclick="AppleTv.closeAdd()" aria-label="Close">✕</button>
+    </div>
+
+    <div id="atvStepChoose">
+      <div id="atvScanList" class="atv-scan-list"></div>
+      <div style="display:flex;gap:8px;margin:14px 0 6px">
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.scan()">↻ Scan again</button>
+      </div>
+      <div class="divider" style="margin:14px 0"></div>
+      <div class="form-group">
+        <label for="atvManualIp">Apple TV IP address</label>
+        <input type="text" id="atvManualIp" placeholder="192.168.1.50" inputmode="decimal" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="atvManualName">Name (optional)</label>
+        <input type="text" id="atvManualName" placeholder="Living Room">
+      </div>
+      <button class="btn btn-primary" onclick="AppleTv.pairManual()">Pair</button>
+    </div>
+
+    <div id="atvStepPin" hidden>
+      <div class="note">A 4-digit code is now showing on <strong id="atvPinTarget">the TV</strong>. Enter it below.</div>
+      <div class="form-group">
+        <label for="atvPin">Code on the TV</label>
+        <input type="text" id="atvPin" class="atv-pin" maxlength="4" inputmode="numeric" autocomplete="one-time-code" placeholder="••••">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="atvPinBtn" onclick="AppleTv.submitPin()">Pair</button>
+        <button class="btn btn-ghost" onclick="AppleTv.cancelPairing()">Cancel</button>
+      </div>
+    </div>
+
+    <div class="alert" id="atvAddAlert" style="margin-top:14px;margin-bottom:0"></div>
+  </div>
+</div>
+
+<!-- Remote -->
+<div class="modal-overlay" id="atvRemoteModal" onclick="if (event.target === this) AppleTv.closeRemote()">
+  <div class="modal atv-modal" role="dialog" aria-modal="true" aria-labelledby="atvRemoteTitle">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-title" id="atvRemoteTitle">Remote</div>
+        <div class="modal-subtitle" id="atvRemoteSubtitle"></div>
+      </div>
+      <button class="modal-close" onclick="AppleTv.closeRemote()" aria-label="Close">✕</button>
+    </div>
+
+    <div class="atv-remote">
+      <div class="atv-dpad">
+        <button class="atv-key atv-up" onclick="AppleTv.key('up')" aria-label="Up">▲</button>
+        <button class="atv-key atv-left" onclick="AppleTv.key('left')" aria-label="Left">◀</button>
+        <button class="atv-key atv-select" onclick="AppleTv.key('select')" aria-label="Select">OK</button>
+        <button class="atv-key atv-right" onclick="AppleTv.key('right')" aria-label="Right">▶</button>
+        <button class="atv-key atv-down" onclick="AppleTv.key('down')" aria-label="Down">▼</button>
+      </div>
+      <div class="atv-row">
+        <button class="btn btn-secondary" onclick="AppleTv.key('menu')">‹ Back</button>
+        <button class="btn btn-secondary" onclick="AppleTv.key('home')">⌂ Home</button>
+        <button class="btn btn-secondary" onclick="AppleTv.key('playpause')">⏯</button>
+      </div>
+      <div class="atv-row">
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('skipbackward')">↺ 10s</button>
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('volumedown')">Vol −</button>
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('volumeup')">Vol +</button>
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('skipforward')">10s ↻</button>
+      </div>
+      <div class="atv-row">
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('poweron')">Wake</button>
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('poweroff')">Sleep</button>
+        <button class="btn btn-ghost btn-sm" onclick="AppleTv.key('home', 'double')">App switcher</button>
+      </div>
+    </div>
+
+    <div class="divider" style="margin:18px 0 12px"></div>
+    <div class="card-title" style="margin-bottom:10px">Apps</div>
+    <div id="atvApps" class="atv-apps"></div>
+  </div>
+</div>

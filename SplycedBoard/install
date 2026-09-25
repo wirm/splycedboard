@@ -1,0 +1,358 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# SplycedBoard installer
+#
+#   ./install              guided install/update with macOS dialogs
+#   ./install --headless   same questions in the terminal (automatic over SSH)
+#   ./install --yes        no questions: keep current choices (unattended update)
+#
+# Installs to ~/Library/Application Support/SplycedBoard, links it to
+# ~/Desktop/SplycedBoard, and runs it as a launchd agent that starts at login and
+# restarts if it ever exits. Re-run it from a newer copy to update — settings and
+# processor pairing are kept.
+#
+# Order matters: everything that can fail (copying, downloading dependencies) happens
+# while the current service keeps running. Services are only stopped right before the
+# new one starts, and if it doesn't come up, a replaced Lutron bridge is put back.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=scripts/lib.sh
+source "$SRC_DIR/scripts/lib.sh"
+
+usage() { sed -n '5,7p' "$0" | sed 's/^# //'; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --headless) SB_HEADLESS=1 ;;
+    --yes|-y) SB_ASSUME_YES=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $arg"; usage; exit 2 ;;
+  esac
+done
+
+SERVICES_STOPPED=0 STARTED=0 LEGACY_BACKUP=""
+
+# If the new service never came up after the old ones were stopped, put back what we
+# replaced so Savant keeps a working bridge.
+recover() {
+  if [ -n "$LEGACY_BACKUP" ] && [ -f "$LEGACY_BACKUP" ]; then
+    launchd_on && { svc_stop "$LABEL" "$PLIST" >/dev/null 2>&1 || true; }
+    rm -f "$PLIST"  # or both would load at next login and fight over the same ports
+    mv "$LEGACY_BACKUP" "$LEGACY_PLIST" || return 0
+    if launchd_on; then
+      launchctl bootstrap "$GUI_DOMAIN" "$LEGACY_PLIST" 2>/dev/null || launchctl load -w "$LEGACY_PLIST" 2>/dev/null || true
+    fi
+    warn "Put the old Savant Lutron Bridge back so Savant keeps working"
+  elif launchd_on && [ -f "$PLIST" ]; then
+    warn "SplycedBoard stays loaded and keeps retrying — see $LOG_DIR/splycedboard.log"
+  fi
+  return 0  # runs inside the EXIT trap: never fail here
+}
+
+# Any unexpected non-zero exit (set -e) is reported here; die() reports its own.
+on_exit() {
+  local code=$?
+  [ "$code" -eq 0 ] && return
+  if [ "$SERVICES_STOPPED" = 1 ] && [ "$STARTED" != 1 ]; then recover; fi
+  [ "${REPORTED:-0}" = 1 ] && return
+  fail "Install failed while: ${CURRENT_STEP:-starting up}"
+  alert "SplycedBoard couldn't finish installing.
+
+It stopped while: ${CURRENT_STEP:-starting up}.
+
+The Terminal window has the details."
+}
+trap on_exit EXIT
+
+launchd_on() { [ "${SB_SKIP_LAUNCHD:-0}" != 1 ]; }   # SB_SKIP_LAUNCHD=1: testing only
+
+[ "$(uname -s)" = Darwin ] || { echo "SplycedBoard installs on macOS only."; exit 1; }
+detect_gui
+
+version_of() {
+  [ -f "$1/package.json" ] || return 0
+  sed -n 's/^  "version": "\(.*\)",$/\1/p' "$1/package.json"
+}
+
+NEW_VERSION="$(version_of "$SRC_DIR")"
+OLD_VERSION="$(version_of "$INSTALL_DIR")"
+IN_PLACE=0
+[ -d "$INSTALL_DIR" ] && [ "$SRC_DIR" = "$(cd "$INSTALL_DIR" && pwd -P)" ] && IN_PLACE=1
+
+printf '\n%s%s installer%s  v%s\n' "$BOLD" "$APP_NAME" "$RESET" "$NEW_VERSION"
+
+# ── 1. Welcome ───────────────────────────────────────────────────────────────
+
+if [ -n "$OLD_VERSION" ]; then
+  VERB="Update" DONE_WORD="updated"
+  WELCOME="Update SplycedBoard from v$OLD_VERSION to v$NEW_VERSION?
+
+Your settings and Lutron pairing are kept. Integrations pause for a few seconds while the service restarts."
+else
+  VERB="Install" DONE_WORD="installed"
+  WELCOME="Install SplycedBoard v$NEW_VERSION?
+
+SplycedBoard runs your Savant integrations — Lutron LEAP, the SCLI bridge and more — as a background service on this Mac.
+
+• Files go in ~/Desktop/SplycedBoard
+• It starts at login and restarts itself if it stops
+• Manage it at http://localhost:$WEB_PORT"
+fi
+if [ -f "$LEGACY_PLIST" ]; then
+  WELCOME="$WELCOME
+
+The old Savant Lutron Bridge service on this Mac will be replaced. Its processor pairing is carried over."
+fi
+
+ask_yes "$WELCOME" "$VERB" || { echo "Cancelled."; exit 0; }
+
+# ── 2. JavaScript runtime ────────────────────────────────────────────────────
+
+step "Checking for Bun"
+if find_runtime; then
+  ok "$RUNTIME_KIND: $RUNTIME"
+else
+  ask_yes "SplycedBoard needs Bun, a small JavaScript runtime (about 60 MB).
+
+Download and install it now from bun.sh?" "Install Bun" || die "SplycedBoard can't run without Bun (or Node.js 18+)."
+  curl -fsSL https://bun.sh/install | bash
+  find_runtime || die "Bun installed, but it isn't where it should be (~/.bun/bin/bun)."
+  ok "Installed $RUNTIME"
+fi
+
+# ── 3. Which integrations ────────────────────────────────────────────────────
+
+step "Choosing integrations"
+IDS=() NAMES=() DEFAULTS=""
+while IFS=$'\t' read -r id enabled name; do
+  IDS+=("$id"); NAMES+=("$name")
+  [ "$enabled" = 1 ] && DEFAULTS="$DEFAULTS$name"$'\n'
+done < <(SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$SRC_DIR/src/cli.js" choices)
+[ "${#IDS[@]}" -gt 0 ] || die "Couldn't read the list of integrations from $SRC_DIR/src."
+
+PICKED="$(choose_many "Which integrations should run on this Mac?
+
+⌘-click to pick more than one. You can change this any time on the dashboard." "$DEFAULTS" "${NAMES[@]}")" \
+  || { echo "Cancelled."; exit 0; }
+
+ENABLED_IDS=""
+for i in "${!NAMES[@]}"; do
+  if printf '%s\n' "$PICKED" | grep -qxF "${NAMES[$i]}"; then
+    ENABLED_IDS="${ENABLED_IDS:+$ENABLED_IDS,}${IDS[$i]}"
+    ok "${NAMES[$i]}"
+  else
+    printf '  %s-  %s (off)%s\n' "$DIM" "${NAMES[$i]}" "$RESET"
+  fi
+done
+
+COPY_PROFILES=0
+if [ -d "$BLUEPRINT_PROFILES" ] && [ -n "$ENABLED_IDS" ] && [ "${SB_ASSUME_YES:-0}" != 1 ]; then
+  ask_yes "Savant Blueprint's profile folder is on this Mac.
+
+Copy the Savant profiles for the chosen integrations into it, so Blueprint can add them? (Restart Blueprint afterwards.)" "Copy Profiles" \
+    && COPY_PROFILES=1 || true
+fi
+
+# ── 4. Files (the current service keeps running) ─────────────────────────────
+
+step "Copying files"
+mkdir -p "$INSTALL_DIR"
+if [ "$IN_PLACE" = 1 ]; then
+  ok "Running from the installed copy — nothing to copy"
+else
+  # Leading "/" anchors a pattern to the top of the tree, so only the top-level
+  # data/, logs/ … are protected from --delete.
+  rsync -a --delete \
+    --exclude='.DS_Store' --exclude='/node_modules/' --exclude='/data/' --exclude='/logs/' \
+    --exclude='/bun.lock' --exclude='/bun.lockb' --exclude='/Open Dashboard.webloc' \
+    "$SRC_DIR/" "$INSTALL_DIR/"
+  ok "Copied to $INSTALL_DIR"
+fi
+chmod -R go-w "$INSTALL_DIR"
+chmod 755 "$INSTALL_DIR/install" "$INSTALL_DIR"/scripts/*
+xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
+mkdir -p "$DATA_DIR" "$LOG_DIR"
+chmod 700 "$DATA_DIR"
+
+# ── 5. Dependencies ──────────────────────────────────────────────────────────
+
+step "Installing dependencies"
+DEPS_STAMP="$INSTALL_DIR/node_modules/.splycedboard-deps"
+DEPS_HASH="$RUNTIME_KIND-$(shasum -a 256 "$INSTALL_DIR/package.json" | cut -c1-16)"
+if [ -f "$DEPS_STAMP" ] && [ "$(cat "$DEPS_STAMP")" = "$DEPS_HASH" ]; then
+  ok "Already up to date"
+else
+  if [ "$RUNTIME_KIND" = bun ]; then
+    (cd "$INSTALL_DIR" && "$RUNTIME" install --production)
+  else
+    NPM="$(dirname "$RUNTIME")/npm"
+    [ -x "$NPM" ] || NPM="$(command -v npm)"
+    (cd "$INSTALL_DIR" && PATH="$(dirname "$RUNTIME"):$PATH" "$NPM" install --omit=dev --no-audit --no-fund --loglevel=error)
+  fi
+  echo "$DEPS_HASH" > "$DEPS_STAMP"
+  ok "Dependencies installed"
+fi
+
+# ── 6. Settings and launchd agent definition ─────────────────────────────────
+
+step "Saving settings"
+SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" set-enabled "$ENABLED_IDS"
+ok "Integrations on: ${ENABLED_IDS:-none}"
+
+mkdir -p "$LAUNCH_AGENTS"
+# Keep launchd's own log (crash output only) from growing without bound.
+if [ -f "$LOG_DIR/launchd.log" ] && [ "$(stat -f%z "$LOG_DIR/launchd.log")" -gt 5000000 ]; then
+  : > "$LOG_DIR/launchd.log"
+fi
+
+# launchd reads this file when the job is loaded, so rewriting it under a running
+# job is safe — the change takes effect at the restart below.
+cat > "$PLIST" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$LABEL</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>$(xml_escape "$RUNTIME")</string>
+        <string>$(xml_escape "$INSTALL_DIR/src/index.js")</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>$(xml_escape "$INSTALL_DIR")</string>
+
+    <!-- Start at login, and start again whenever the process exits (crash or restart). -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- The app writes its own rotating log; this only catches crash output. -->
+    <key>StandardOutPath</key>
+    <string>$(xml_escape "$LOG_DIR/launchd.log")</string>
+    <key>StandardErrorPath</key>
+    <string>$(xml_escape "$LOG_DIR/launchd.log")</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$(xml_escape "$(dirname "$RUNTIME")"):/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>$(xml_escape "$HOME")</string>
+        <key>SPLYCEDBOARD_MANAGED</key>
+        <string>1</string>
+        <key>SPLYCEDBOARD_HOME</key>
+        <string>$(xml_escape "$INSTALL_DIR")</string>
+        <key>SPLYCEDBOARD_LOG_DIR</key>
+        <string>$(xml_escape "$LOG_DIR")</string>
+        <key>SPLYCEDBOARD_WEB_PORT</key>
+        <string>$WEB_PORT</string>
+    </dict>
+</dict>
+</plist>
+PLIST_EOF
+plutil -lint "$PLIST" >/dev/null
+ok "Wrote $PLIST"
+
+# ── 7. Switch over: stop the old service(s), start the new one ───────────────
+
+step "Starting the background service"
+if launchd_on; then
+  svc_stop "$LABEL" "$PLIST" || warn "The previous SplycedBoard took a while to stop"
+fi
+if [ -f "$LEGACY_PLIST" ]; then
+  launchd_on && { svc_stop "$LEGACY_LABEL" "$LEGACY_PLIST" || true; }
+  mkdir -p "$DATA_DIR/replaced"
+  LEGACY_BACKUP="$DATA_DIR/replaced/$LEGACY_LABEL.plist"
+  mv "$LEGACY_PLIST" "$LEGACY_BACKUP"
+  ok "Stopped the old Savant Lutron Bridge (plist kept in data/replaced; ~/savant-leap is untouched)"
+fi
+SERVICES_STOPPED=1
+
+if ! launchd_on; then
+  warn "Skipping launchd (SB_SKIP_LAUNCHD=1)"
+  STARTED=1
+else
+  if lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    warn "Port $WEB_PORT is already in use by: $(lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN | awk 'NR==2 {print $1" (pid "$2")"}')"
+    warn "Stop it (e.g. a test copy running in Terminal) or SplycedBoard can't start."
+  fi
+  svc_start
+  if wait_healthy 30; then
+    STARTED=1
+    ok "Running (pid $(svc_pid))"
+  else
+    fail "The service didn't come up. Last log lines:"
+    tail -n 15 "$LOG_DIR/splycedboard.log" 2>/dev/null | sed 's/^/     /' || true
+    tail -n 15 "$LOG_DIR/launchd.log" 2>/dev/null | sed 's/^/     /' || true
+    CURRENT_STEP="waiting for the service to start (see $LOG_DIR)"
+    false
+  fi
+fi
+
+# ── 8. Desktop link, dashboard shortcut, Blueprint profiles ──────────────────
+
+step "Finishing up"
+cat > "$INSTALL_DIR/Open Dashboard.webloc" <<WEBLOC_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>URL</key>
+    <string>http://localhost:$WEB_PORT/</string>
+</dict>
+</plist>
+WEBLOC_EOF
+
+# The files live in Application Support because macOS blocks background services from
+# reading ~/Desktop; the Desktop gets a link to them instead.
+if [ -L "$DESKTOP_LINK" ]; then
+  ln -sfn "$INSTALL_DIR" "$DESKTOP_LINK"
+  ok "Desktop link: $DESKTOP_LINK"
+elif [ -e "$DESKTOP_LINK" ]; then
+  if [ "$(cd "$DESKTOP_LINK" && pwd -P)" = "$SRC_DIR" ]; then
+    warn "~/Desktop/SplycedBoard is this installer's own folder, so no link was made."
+    warn "The running copy is in: $INSTALL_DIR"
+  else
+    warn "~/Desktop/SplycedBoard already exists and isn't a link — left it alone."
+  fi
+else
+  ln -s "$INSTALL_DIR" "$DESKTOP_LINK"
+  ok "Desktop link: $DESKTOP_LINK"
+fi
+
+if [ "$COPY_PROFILES" = 1 ]; then
+  while IFS= read -r profile; do
+    cp "$profile" "$BLUEPRINT_PROFILES/"
+    ok "Blueprint profile: $(basename "$profile")"
+  done < <(SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" profiles "$ENABLED_IDS")
+fi
+
+# ── Done ─────────────────────────────────────────────────────────────────────
+
+URL="http://$(lan_ip):$WEB_PORT"
+printf '\n%s%s v%s is %s.%s\n\n' "$BOLD" "$APP_NAME" "$NEW_VERSION" "$DONE_WORD" "$RESET"
+printf '  Dashboard   http://localhost:%s   (from other devices: %s)\n' "$WEB_PORT" "$URL"
+printf '  Files       %s → %s\n' "$DESKTOP_LINK" "$INSTALL_DIR"
+printf '  Logs        %s/splycedboard.log\n\n' "$LOG_DIR"
+
+if [ "${SB_ASSUME_YES:-0}" != 1 ]; then
+  notify "SplycedBoard is running"
+  CHOICE="$(ask_button "SplycedBoard v$NEW_VERSION is $DONE_WORD and running.
+
+Dashboard: $URL
+Files: ~/Desktop/SplycedBoard
+
+Next: add the Savant profile for each integration in Blueprint (the dashboard shows how)." "Done" "Show Files" "Open Dashboard")" || true
+  case "$CHOICE" in
+    "Open Dashboard") open "http://localhost:$WEB_PORT/" || true ;;
+    "Show Files") open "$INSTALL_DIR" || true ;;
+  esac
+fi

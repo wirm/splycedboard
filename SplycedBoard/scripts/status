@@ -1,0 +1,17 @@
+#!/bin/bash
+# Show whether SplycedBoard is running and what each integration is doing.
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+if svc_loaded "$LABEL"; then
+  pid="$(svc_pid)"
+  [ -n "$pid" ] && ok "Service running (pid $pid)" || warn "Service loaded but not running — see $LOG_DIR"
+else
+  warn "Service not loaded (start it with scripts/start)"
+fi
+json="$(curl -fsS --max-time 3 "http://127.0.0.1:$WEB_PORT/api/hub" 2>/dev/null)" || { fail "Dashboard not answering on port $WEB_PORT"; exit 1; }
+find_runtime >/dev/null 2>&1 || { echo "$json"; exit 0; }
+printf '%s' "$json" | "$RUNTIME" -e '
+  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+    const { app, integrations } = JSON.parse(s);
+    console.log(`  SplycedBoard ${app.version} · ${app.runtime} · http://localhost:${app.port}`);
+    for (const i of integrations) console.log(`  ${i.enabled ? "●" : "○"} ${i.name.padEnd(14)} ${i.status.text}`);
+  });'

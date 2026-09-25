@@ -1,0 +1,7 @@
+#!/bin/bash
+# Start the SplycedBoard background service.
+source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+[ -f "$PLIST" ] || { fail "SplycedBoard isn't installed — run ./install first."; exit 1; }
+if svc_loaded "$LABEL"; then ok "Already running (pid $(svc_pid))"; exit 0; fi
+svc_start
+wait_healthy 20 && ok "Started (pid $(svc_pid)) — http://localhost:$WEB_PORT" || { fail "Didn't come up — see $LOG_DIR/splycedboard.log"; exit 1; }

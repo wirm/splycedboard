@@ -1,0 +1,11 @@
+{
+  "id": "appletv",
+  "name": "Apple TV",
+  "icon": "📺",
+  "description": "IP control of any number of Apple TVs over Apple's Companion protocol (the iPhone Remote's protocol, paired with a PIN — no HomeKit). One Savant component per Apple TV, addressed by its IP.",
+  "profile": "apple_tv_ip.xml",
+  "defaultEnabled": false,
+  "endpoints": [
+    { "port": 47200, "protocol": "HTTP", "path": "/api/appletv", "use": "Savant profile commands and status polling" }
+  ]
+}

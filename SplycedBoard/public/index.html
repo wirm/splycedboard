@@ -4,7 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SplycedBoard</title>
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+<!-- Splyced's typefaces (www.splyced.pro); without internet the system fonts stand in -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/css/app.css">
+<script>
+  // Settings → Theme, applied before the first paint (the default follows the system)
+  try {
+    const theme = localStorage.getItem('splycedboard.theme');
+    if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+  } catch { /* storage unavailable: follow the system */ }
+</script>
 </head>
 <body>
 
@@ -12,7 +24,7 @@
   <div style="display:flex;align-items:center;gap:12px">
     <button class="menu-btn" id="menuBtn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">☰</button>
     <a class="logo" href="#/">
-      <div class="logo-icon">S</div>
+      <img class="logo-mark" src="/img/logo.svg" alt="" width="34" height="32">
       <span>SplycedBoard</span>
     </a>
   </div>
@@ -58,10 +70,11 @@
           <div class="card-title">Connecting an integration to Savant</div>
           <ol class="steps-list">
             <li><div><strong>Download the Savant profile</strong> from the integration's card on the Mac that runs
-              Blueprint, and add it to your profile library in Blueprint's Preferences. On older Blueprint, copy it into
+              Blueprint. It's a zip: open it for a folder with the profile inside. Add the profile to your library in
+              Blueprint's Preferences, replacing the old one. On older Blueprint, copy it into
               <code>~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/</code>
-              and restart Blueprint. Keep the file name: Blueprint finds a profile by it, so a renamed copy gives
-              "Component not found".</div></li>
+              and restart Blueprint. Keep the file name: Blueprint finds a profile by it, so a renamed copy, such as
+              "… (1).xml", gives "Component not found".</div></li>
             <li><div><strong>Add the component</strong> in Blueprint and set its address to <code>127.0.0.1</code>
               (SplycedBoard runs on the Pro Host itself). HTTP profiles use port <code id="stepsPort">47200</code>.</div></li>
             <li><div><strong>Fill in the data tables</strong> using the IDs shown in the integration's panel, then upload the configuration to the host.</div></li>
@@ -142,6 +155,22 @@
           </div>
 
           <div>
+            <div class="card">
+              <div class="card-title">Appearance</div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-name">Theme</div>
+                  <div class="setting-desc">Splyced's dark or cream look. Automatic follows this device's
+                    light or dark mode. Kept in this browser only.</div>
+                </div>
+                <select id="themeSelect" aria-label="Theme" style="width:auto">
+                  <option value="auto">Automatic</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+            </div>
+
             <div class="card">
               <div class="card-title">Open the dashboard from another device</div>
               <div id="dashboardUrls" class="info-row" style="margin-bottom:0"></div>

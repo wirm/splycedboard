@@ -111,7 +111,7 @@ const SB = (() => {
           ${endpoints ? `<div class="int-endpoints">${endpoints}</div>` : ''}
           <div class="int-actions">
             <a class="btn btn-secondary btn-sm" href="#/${esc(i.id)}">Open</a>
-            ${i.profile ? `<a class="btn btn-ghost btn-sm" href="/api/hub/integrations/${esc(i.id)}/profile" download>⬇ Savant profile</a>` : ''}
+            ${i.profile ? `<a class="btn btn-ghost btn-sm" href="/api/hub/integrations/${esc(i.id)}/profile" download title="A .zip: open it for a folder holding the profile under the exact name Blueprint needs">⬇ Savant profile</a>` : ''}
           </div>
         </div>`;
     }).join('');
@@ -397,7 +397,7 @@ const SB = (() => {
           <div class="setting-desc mono">${esc(i.profile)}</div>
           ${profileUse(p)}
         </div>
-        <a class="btn btn-ghost btn-sm" href="/api/hub/integrations/${esc(i.id)}/profile" download>⬇ Download</a>
+        <a class="btn btn-ghost btn-sm" href="/api/hub/integrations/${esc(i.id)}/profile" download title="A .zip: open it for a folder holding the profile under the exact name Blueprint needs">⬇ Download</a>
       </div>`;
     }).join('') : '<div class="setting-desc">No integration ships a Savant profile.</div>';
   }
@@ -520,7 +520,24 @@ const SB = (() => {
     } catch { /* not reachable right now */ }
   }
 
+  // Per browser, like the dark/light mode it overrides (index.html applies it before paint)
+  function initTheme() {
+    const select = $('themeSelect');
+    const saved = () => { try { return localStorage.getItem('splycedboard.theme'); } catch { return null; } };
+    select.value = ['light', 'dark'].includes(saved()) ? saved() : 'auto';
+    select.addEventListener('change', () => {
+      const theme = select.value;
+      if (theme === 'auto') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme;
+      try {
+        if (theme === 'auto') localStorage.removeItem('splycedboard.theme');
+        else localStorage.setItem('splycedboard.theme', theme);
+      } catch { /* not kept: this page load only */ }
+    });
+  }
+
   function initSettings() {
+    initTheme();
     $('verboseToggle').addEventListener('change', async (e) => {
       try {
         settings = await api('PUT', '/api/hub/settings', { verbose: e.target.checked });

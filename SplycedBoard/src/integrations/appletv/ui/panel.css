@@ -20,8 +20,8 @@
 .atv-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .atv-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .atv-status { font-size: 13px; color: var(--muted); line-height: 1.4; }
-.atv-status.ok { color: #86efac; }
-.atv-status.error { color: #fca5a5; }
+.atv-status.ok { color: var(--green-text); }
+.atv-status.error { color: var(--red-text); }
 
 .atv-savant {
   display: flex;

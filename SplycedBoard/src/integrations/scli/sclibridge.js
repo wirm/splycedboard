@@ -44,9 +44,14 @@ function parseServiceRequestArgs(command) {
   return args;
 }
 
-/** Split a command line into arguments, keeping "quoted strings" together. */
+/**
+ * Split a command line into arguments the way a shell would: "quoted strings" stay together
+ * and lose their quotes, so `readstate "Room 1.Lights"` reads the state Room 1.Lights. Savant's
+ * component states usually have a space in them ("Lighting Controller.Lighting_controller.…").
+ */
 function splitArgs(command) {
-  return command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+  return (command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [])
+    .map((arg) => arg.replace(/"([^"]*)"|'([^']*)'/g, (_, double, single) => double ?? single));
 }
 
 class ScliBridge {

@@ -5,7 +5,7 @@
     model="Requests"
     device_class="Remote_control"
     minimum_component_engine_version="0"
-    rpm_xml_version="2.2">
+    rpm_xml_version="3.0">
     <notes>
         ====================== Change Log ==================
         Version: 3.0 Change: Rewritten in Python 3 (no Ruby dependency). Risk: Low Importance: Forced

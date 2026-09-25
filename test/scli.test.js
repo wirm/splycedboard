@@ -40,6 +40,13 @@ test('HTTP GET command returns a plain-text response', async () => {
   assert.equal(await res.text(), '[writestate]\n[userDefined.foo]\n[1]\n');
 });
 
+test('quoted arguments stay together and lose their quotes, as in a shell', async () => {
+  let out = await h.rawExchange(clientPort, 'readstate "Lighting Controller.Lighting_controller.DimmerLevel_486"\n');
+  assert.equal(out, '[readstate]\n[Lighting Controller.Lighting_controller.DimmerLevel_486]\n');
+  out = await (await fetch(`http://127.0.0.1:${clientPort}/writestate%20%22userDefined.Guest%20Mode%22%20'on%20hold'`)).text();
+  assert.equal(out, '[writestate]\n[userDefined.Guest Mode]\n[on hold]\n');
+});
+
 test('servicerequestcommand arguments are split into name/value pairs', async () => {
   assert.deepEqual(
     parseServiceRequestArgs('servicerequestcommand Den-AppleTV-1-SVC_AV_TV-PowerOn:Level=50,Empty=,Name=Den'),

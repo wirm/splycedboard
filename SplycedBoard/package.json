@@ -1,6 +1,6 @@
 {
   "name": "splycedboard",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "SplycedBoard — a hub of Savant integrations that runs on the Savant Pro Host",
   "repository": {

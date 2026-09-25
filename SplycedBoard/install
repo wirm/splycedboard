@@ -312,20 +312,32 @@ cat > "$INSTALL_DIR/Open Dashboard.webloc" <<WEBLOC_EOF
 WEBLOC_EOF
 
 # The files live in Application Support because macOS blocks background services from
-# reading ~/Desktop; the Desktop gets a link to them instead.
+# reading ~/Desktop; the Desktop gets a link to them instead. The link is a convenience: an
+# update from the dashboard runs as a background job, which macOS keeps out of the Desktop
+# ("Operation not permitted"), so it may only warn, never fail the install.
+desktop_link_failed() {
+  warn "Couldn't make the Desktop link (macOS keeps background jobs out of the Desktop)."
+  warn "The files are in: $INSTALL_DIR"
+}
 if [ -L "$DESKTOP_LINK" ]; then
-  ln -sfn "$INSTALL_DIR" "$DESKTOP_LINK"
-  ok "Desktop link: $DESKTOP_LINK"
+  if [ "$(readlink "$DESKTOP_LINK" 2>/dev/null)" = "$INSTALL_DIR" ]; then
+    ok "Desktop link: $DESKTOP_LINK"
+  elif ln -sfn "$INSTALL_DIR" "$DESKTOP_LINK" 2>/dev/null; then
+    ok "Desktop link: $DESKTOP_LINK"
+  else
+    desktop_link_failed
+  fi
 elif [ -e "$DESKTOP_LINK" ]; then
-  if [ "$(cd "$DESKTOP_LINK" && pwd -P)" = "$SRC_DIR" ]; then
+  if [ "$(cd "$DESKTOP_LINK" 2>/dev/null && pwd -P)" = "$SRC_DIR" ]; then
     warn "~/Desktop/SplycedBoard is this installer's own folder, so no link was made."
     warn "The running copy is in: $INSTALL_DIR"
   else
     warn "~/Desktop/SplycedBoard already exists and isn't a link — left it alone."
   fi
-else
-  ln -s "$INSTALL_DIR" "$DESKTOP_LINK"
+elif ln -s "$INSTALL_DIR" "$DESKTOP_LINK" 2>/dev/null; then
   ok "Desktop link: $DESKTOP_LINK"
+else
+  desktop_link_failed
 fi
 
 if [ "$COPY_PROFILES" = 1 ]; then

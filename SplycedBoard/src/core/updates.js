@@ -32,6 +32,8 @@ const FIRST_CHECK_MS = 60 * 1000;
 const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const API_TIMEOUT_MS = 20 * 1000;
 const RECHECK_MS = 30 * 1000; // a check this recent answers "Check now" again, without asking GitHub
+const DOWNLOAD_TRIES = 4;
+const DOWNLOAD_RETRY_MS = 5000;
 const DOWNLOAD_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 const WATCH_EVERY_MS = 2000;
@@ -89,9 +91,10 @@ class Updater extends EventEmitter {
    * @param managed   running as the launchd service: only then can it install
    * @param launch    how to run the installer (tests replace launchdLauncher)
    */
-  constructor({ version, repo, dataDir, logDir = null, managed = false, log = null, apiBase, launch = launchdLauncher, watchEveryMs = WATCH_EVERY_MS, now = Date.now }) {
+  constructor({ version, repo, dataDir, logDir = null, managed = false, log = null, apiBase, launch = launchdLauncher, watchEveryMs = WATCH_EVERY_MS, now = Date.now, retryDelayMs = DOWNLOAD_RETRY_MS }) {
     super();
     this.now = now;
+    this.retryDelayMs = retryDelayMs;
     this.repo = repo;
     this.log = log;
     this.apiBase = apiBase || process.env.SPLYCEDBOARD_UPDATE_API || 'https://api.github.com';
@@ -240,7 +243,17 @@ class Updater extends EventEmitter {
 
   async _download(asset) {
     if (asset.size > MAX_DOWNLOAD_BYTES) throw new Error('The download is unexpectedly large');
-    const res = await fetch(asset.url, { headers: { 'User-Agent': this.userAgent }, signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+    // A release GitHub has only just published lists its file a moment before the file itself
+    // downloads: a 404 then is worth a few more tries, seconds apart.
+    let res;
+    for (let tries = 1; ; tries++) {
+      res = await fetch(asset.url, { headers: { 'User-Agent': this.userAgent }, signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+      if (res.status !== 404 || tries === DOWNLOAD_TRIES) break;
+      await res.arrayBuffer().catch(() => {});
+      this.log?.info(`The download isn't on GitHub yet (HTTP 404); trying again in ${Math.round(this.retryDelayMs / 1000)} s`);
+      await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
+    }
+    if (res.status === 404) throw new Error("The download isn't on GitHub yet (HTTP 404). A release that has just come out takes a minute: try again shortly.");
     if (!res.ok) throw new Error(`The download failed: HTTP ${res.status}`);
     const data = Buffer.from(await res.arrayBuffer());
     const [algorithm, expected] = String(asset.digest || '').split(':');

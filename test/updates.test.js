@@ -28,7 +28,7 @@ function fakePackage(version, installScript) {
 }
 
 // GitHub: the releases API, and a download that redirects to the file, as github.com does.
-const github = { release: null, archive: null, digest: undefined, limitedUntil: 0, apiCalls: 0 };
+const github = { release: null, archive: null, digest: undefined, limitedUntil: 0, apiCalls: 0, notYet: 0 };
 let server;
 let base;
 
@@ -59,6 +59,12 @@ before(async () => {
         }],
       }));
     }
+    if (req.url.startsWith('/wirm/splycedboard/releases/download/') && github.notYet > 0) {
+      // A release just published: listed, but its file not downloadable yet
+      github.notYet--;
+      res.writeHead(404);
+      return res.end('Not Found');
+    }
     if (req.url.startsWith('/wirm/splycedboard/releases/download/')) {
       res.writeHead(302, { location: '/release-assets/7f3a9c?sig=abc' });
       return res.end();
@@ -83,7 +89,7 @@ function release(version, installScript = 'exit 0', packageVersion = version) {
 
 function updater({ version = '2.0.0', managed = true, launch, now } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-update-'));
-  return new Updater({ version, repo: 'wirm/splycedboard', dataDir, managed, apiBase: base, launch, watchEveryMs: 50, now });
+  return new Updater({ version, repo: 'wirm/splycedboard', dataDir, managed, apiBase: base, launch, watchEveryMs: 50, now, retryDelayMs: 20 });
 }
 
 // Runs the installer as launchdLauncher's job does, minus launchd.
@@ -215,6 +221,20 @@ test('install() downloads through the redirect, verifies, unpacks, and runs the 
   assert.match(u.logTail(), /installer ran: --yes --headless/);
   assert.ok(!fs.existsSync(path.join(u.workDir, 'pending.json')));
   assert.deepEqual([states.includes(true), states.at(-1)], [true, false]);
+});
+
+test("a release just out, whose file isn't downloadable yet, is tried again; still missing, it says so", async () => {
+  release('2.1.0');
+  github.notYet = 2;
+  const calls = [];
+  const u = updater({ launch: runDirectly(calls) });
+  await u.install();
+  assert.equal(calls.length, 1, 'installed on the third try');
+  await finished(u);
+
+  github.notYet = 10;
+  await assert.rejects(updater({ launch: runDirectly([]) }).install(), /isn't on GitHub yet \(HTTP 404\)/);
+  github.notYet = 0;
 });
 
 test('two Update clicks at once start one installer', async () => {

@@ -165,6 +165,30 @@ async function main() {
   check(!result.timedOut, "It didn't stop within 10 s of SIGTERM");
   check(result.code === 0, `It exited with ${result.signal || `code ${result.code}`} instead of stopping cleanly`);
   ok('Stopped cleanly');
+
+  // The dashboard's updater runs the installer as a background job, which macOS keeps out of
+  // ~/Desktop ("Operation not permitted"). An old link it can't replace must only be a warning.
+  step('Installing again, as an update does, with the Desktop out of reach');
+  const desktop = path.join(home, 'Desktop');
+  const link = path.join(desktop, 'SplycedBoard');
+  fs.rmSync(link, { force: true });
+  fs.symlinkSync(path.join(work, 'an-older-install'), link);
+  fs.chmodSync(desktop, 0o555);
+  let output;
+  try {
+    output = execFileSync(path.join(pkgDir, 'install'), ['--headless', '--yes'], {
+      cwd: work,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { PATH: process.env.PATH, HOME: home, TMPDIR: work, SPLYCEDBOARD_WEB_PORT: String(port), SB_SKIP_LAUNCHD: '1' },
+    });
+  } catch (err) {
+    check(false, `The update failed over the Desktop link:\n${String(err.stdout || '').split('\n').slice(-12).join('\n')}`);
+  } finally {
+    fs.chmodSync(desktop, 0o755);
+  }
+  check(/Couldn't make the Desktop link/.test(output), "The installer didn't say the Desktop link was left alone");
+  ok('Installed, with a warning about the Desktop link');
 }
 
 function tail(file, lines = 30) {

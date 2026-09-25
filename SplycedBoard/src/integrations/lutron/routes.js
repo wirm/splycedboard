@@ -22,7 +22,9 @@
 const express = require('express');
 
 const { discoverProcessors } = require('./discovery');
-const { buildLightingPlist } = require('./blueprint-export');
+const { buildLightingPlist, isLighting } = require('./blueprint-export');
+const { mapRooms } = require('./rooms');
+const { savantRooms } = require('../../core/savant');
 const { rgbToHsv, cctLevelToKelvin } = require('./color');
 
 const DEFAULT_COMPONENT_NAME = 'LutronLeapBridge';
@@ -114,12 +116,81 @@ function createRoutes(lutron) {
     return { ok: true };
   }));
 
+  // ── Rooms: which Savant room each Lutron area's lights go in (rooms.js) ────
+  // settings.rooms = { savant: [names], savantSource: 'savant' | 'typed', savantAt,
+  //                    decisions: { [areaId]: { zone } } }   zone null: keep the Lutron name
+
+  const roomSettings = () => lutron.settings.load().rooms || {};
+  const saveRooms = (change) => lutron.settings.update((s) => {
+    s.rooms = s.rooms || {};
+    change(s.rooms);
+  });
+  const ready = (c) => {
+    if (!c.ready) throw httpError(503, 'Not connected to the processor');
+  };
+
+  function roomView(c) {
+    const r = roomSettings();
+    return {
+      savant: { rooms: r.savant || [], source: r.savantSource || null, at: r.savantAt || null },
+      ...mapRooms({
+        areas: [...c.areas.values()],
+        zones: [...c.zones.values()].filter(isLighting),
+        savantRooms: r.savant || [],
+        decisions: r.decisions || {},
+      }),
+    };
+  }
+
+  router.get('/rooms', withController((c) => {
+    ready(c);
+    return roomView(c);
+  }));
+
+  // Savant's rooms, as its running configuration lists them
+  router.post('/rooms/savant/read', withController(async (c) => {
+    ready(c);
+    const rooms = await savantRooms();
+    saveRooms((r) => Object.assign(r, { savant: rooms, savantSource: 'savant', savantAt: new Date().toISOString() }));
+    log.info(`Read ${rooms.length} rooms from Savant`);
+    return roomView(c);
+  }));
+
+  // ...or typed in, e.g. before the configuration is on the host
+  router.put('/rooms/savant', withController((c, req) => {
+    ready(c);
+    const list = req.body?.rooms;
+    if (!Array.isArray(list)) throw httpError(400, 'rooms (a list of names) required');
+    const rooms = [...new Set(list.map((s) => String(s).trim()).filter(Boolean))];
+    saveRooms((r) => Object.assign(r, { savant: rooms, savantSource: 'typed', savantAt: new Date().toISOString() }));
+    return roomView(c);
+  }));
+
+  // { zone: "Kitchen" } picks a Savant room, { zone: null } keeps the Lutron name, and
+  // { automatic: true } goes back to the suggestion.
+  router.put('/rooms/:areaId', withController((c, req) => {
+    ready(c);
+    const areaId = int(req.params.areaId, 'areaId');
+    if (!c.areas.has(areaId)) throw httpError(404, `No Lutron area ${areaId}`);
+    const { zone, automatic } = req.body || {};
+    if (!automatic && zone !== null && typeof zone !== 'string') {
+      throw httpError(400, 'zone (a Savant room, or null for the Lutron name) or automatic: true required');
+    }
+    saveRooms((r) => {
+      r.decisions = r.decisions || {};
+      if (automatic) delete r.decisions[areaId];
+      else r.decisions[areaId] = { zone };
+    });
+    return roomView(c);
+  }));
+
   router.get('/export/lighting', withController((c, req, res) => {
     if (!c.ready) throw httpError(503, 'Not connected');
     const component = lutron.settings.load().componentName || DEFAULT_COMPONENT_NAME;
+    const roomOf = new Map(roomView(c).rooms.map((r) => [r.areaId, r.zone]));
     res.setHeader('Content-Type', 'application/x-plist');
     res.setHeader('Content-Disposition', 'attachment; filename="lighting_export.plist"');
-    res.send(buildLightingPlist(c.zones.values(), component));
+    res.send(buildLightingPlist(c.zones.values(), component, { roomFor: (zone) => roomOf.get(zone.areaId) || null }));
   }));
 
   // ── Savant profile: zones, areas, shades ───────────────────────────────────

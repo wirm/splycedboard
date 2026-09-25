@@ -78,9 +78,37 @@ configuration.
 **Address1 = LEAP Zone ID.** Every zone's ID is shown on the **Loads** tab. They're stable
 integers assigned by the processor, not the addresses from Designer's device list.
 
-The **⬇ Export** button on the Loads tab downloads a ready-made `lighting_export.plist` for
-Blueprint's lighting table. Set **Blueprint Component Name** on the Setup tab first, so the
-rows point at your component.
+The **⬇ Export** button on the Loads and Rooms tabs downloads a ready-made
+`lighting_export.plist` for Blueprint's lighting table. Set **Blueprint Component Name** on
+the Setup tab first, so the rows point at your component.
+
+### Rooms: Lutron areas → Savant rooms
+
+Each light in the export goes in a Savant room, so Blueprint doesn't need them assigned by
+hand. The **Rooms** tab decides which.
+
+1. **Get Savant's rooms.** **Read rooms from Savant** asks the running configuration on the Pro
+   Host (`sclibridge userzones`). Or type them in with **Edit room list**, spelled as in
+   Blueprint, for example before the configuration is on the host.
+2. **Clear matches apply by themselves**, when the area's name is unique:
+   - the same name;
+   - the same words, ignoring "room", abbreviations and Master/Primary/Owner's ("Living Room" →
+     Living, "Mstr Bath" → Master Bathroom);
+   - one name part of the other ("Kitchen Island" → Kitchen);
+   - a one-letter slip ("Kitchn" → Kitchen).
+3. **Everything else waits for you**, with the likeliest room already selected:
+   - areas that share a name, like a "Bathroom" in every suite;
+   - close calls and weak matches;
+   - earlier choices that aren't Savant rooms any more.
+
+   Lutron's hierarchy picks each suggestion: *Upstairs › Guest Suite › Bathroom* → Guest Bath.
+   **Review** walks through them one at a time, showing where each area sits and which lights
+   it has.
+4. **Move anything, any time.** The menu on each row picks another Savant room, keeps the
+   Lutron name, or goes back to **Automatic**. Your choices are kept, across reconnects too.
+
+Areas still waiting when you export go out under their Lutron names, and the export asks
+first.
 
 | Load | Entity | Address1 |
 |---|---|---|

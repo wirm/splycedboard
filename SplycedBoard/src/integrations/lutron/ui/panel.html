@@ -12,6 +12,7 @@
 <nav class="subnav">
   <button class="tab-btn active" data-tab="setup">Setup</button>
   <button class="tab-btn" data-tab="loads">Loads</button>
+  <button class="tab-btn" data-tab="rooms">Rooms <span class="lt-tab-badge" id="ltRoomsBadge" hidden></span></button>
   <button class="tab-btn" data-tab="thermostats">Thermostats</button>
   <button class="tab-btn" data-tab="keypads">Keypads</button>
   <button class="tab-btn" data-tab="scenes">Scenes</button>
@@ -151,6 +152,29 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════ ROOMS ══════════════════════════════════ -->
+<div class="tab-pane" data-pane="rooms">
+  <div class="lt-rooms-head">
+    <p class="lt-rooms-intro">Which Savant room each Lutron area's lights go in, for the lighting export.
+      Matches apply by themselves when they're clear; the rest wait for you.</p>
+    <div class="lt-rooms-actions">
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.readSavantRooms()">↻ Read rooms from Savant</button>
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.editSavantRooms()">✎ Edit room list</button>
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.exportLighting()" title="Download Savant lighting_export.plist">⬇ Export</button>
+      <button class="btn btn-primary btn-sm" id="ltRoomsReviewBtn" onclick="Lutron.reviewRooms()" hidden>Review</button>
+    </div>
+  </div>
+  <div class="lt-rooms-savant" id="ltRoomsSavant"></div>
+  <div class="lt-rooms-summary" id="ltRoomsSummary"></div>
+  <div id="ltRoomsList">
+    <div class="empty-state">
+      <div class="empty-icon">🏠</div>
+      <div class="empty-title">No Rooms</div>
+      <div class="empty-desc">Connect to a Lutron processor to map its areas to Savant rooms</div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════ THERMOSTATS ══════════════════════════════ -->
 <div class="tab-pane" data-pane="thermostats">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px">
@@ -201,6 +225,36 @@
 </div>
 
 <!-- Color / tuning modal -->
+<div class="modal-overlay" id="ltReviewModal" onclick="if (event.target === this) Lutron.closeReview()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ltReviewTitle">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-title" id="ltReviewTitle">Which Savant room?</div>
+        <div class="modal-subtitle" id="ltReviewStep"></div>
+      </div>
+      <button class="modal-close" onclick="Lutron.closeReview()" aria-label="Close">✕</button>
+    </div>
+    <div id="ltReviewContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ltSavantRoomsModal" onclick="if (event.target === this) Lutron.closeSavantRooms()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ltSavantRoomsTitle">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-title" id="ltSavantRoomsTitle">Savant rooms</div>
+        <div class="modal-subtitle">One per line, spelled as in Blueprint</div>
+      </div>
+      <button class="modal-close" onclick="Lutron.closeSavantRooms()" aria-label="Close">✕</button>
+    </div>
+    <textarea id="ltSavantRoomsText" class="lt-rooms-text" rows="12" aria-label="Savant rooms, one per line"></textarea>
+    <div class="lt-review-actions">
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.closeSavantRooms()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="Lutron.saveSavantRooms()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="colorModal" onclick="if (event.target === this) Lutron.closeColorModal()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="colorModalName">
     <div class="modal-header">

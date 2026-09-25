@@ -42,10 +42,14 @@ function makeClientCerts() {
 // ── Inventory ────────────────────────────────────────────────────────────────
 
 function createState() {
+  // Areas nest as on a real system: the project, floors, then rooms.
   const areas = [
-    { id: 1, name: 'Kitchen' },
-    { id: 2, name: 'Living Room' },
-    { id: 3, name: 'Primary Suite' },
+    { id: 100, name: 'Home' },
+    { id: 110, name: 'Main Floor', parent: 100 },
+    { id: 120, name: 'Upstairs', parent: 100 },
+    { id: 1, name: 'Kitchen', parent: 110 },
+    { id: 2, name: 'Living Room', parent: 110 },
+    { id: 3, name: 'Primary Suite', parent: 120 },
   ];
   const zones = [
     { id: 101, area: 1, name: 'Kitchen Cans', type: 'Dimmed', level: 75 },
@@ -114,7 +118,16 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
 
   function read(url) {
     let m;
-    if (url === '/area') return { AreaList: state.areas.map((a) => ({ href: `/area/${a.id}`, Name: a.name })) };
+    if (url === '/area') {
+      return {
+        AreaList: state.areas.map((a) => ({
+          href: `/area/${a.id}`,
+          Name: a.name,
+          ...(a.parent ? { Parent: { href: `/area/${a.parent}` } } : {}),
+          IsLeaf: !state.areas.some((x) => x.parent === a.id),
+        })),
+      };
+    }
     if (url === '/zone' || url === '/device' || url.startsWith('/buttongroup')) return 405;
     if (url === '/zone/status') return { ZoneStatusList: state.zones.filter((z) => !z.hvac).map(zoneStatus).concat(state.zones.filter((z) => z.hvac).map((z) => ({ Zone: { href: `/zone/${z.id}` } }))) };
     if ((m = url.match(/^\/zone\/(\d+)\/status$/))) {

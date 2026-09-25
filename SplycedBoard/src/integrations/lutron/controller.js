@@ -99,7 +99,14 @@ class LeapController extends EventEmitter {
       this.areas.clear();
       for (const area of areas) {
         const id = this._hrefId(area.href);
-        const areaObj = { id, name: area.Name || `Area ${id}`, href: area.href };
+        // parentId: areas nest (Main Floor › Primary Suite › Bath); room mapping needs the path.
+        const areaObj = {
+          id,
+          name: area.Name || `Area ${id}`,
+          href: area.href,
+          parentId: this._hrefId(area.Parent?.href) ?? null,
+          isLeaf: area.IsLeaf ?? null,
+        };
         this.areas.set(id, areaObj);
         rawAreas.push(areaObj);
       }

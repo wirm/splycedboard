@@ -11,35 +11,18 @@
  *   (profiles/ip_requests.xml) and holds the connection open. It is tracked for
  *   status only; every command is executed through sclibridge.
  */
-const fs = require('fs');
 const net = require('net');
 const { execFile } = require('child_process');
 
 const { listen, close } = require('../../core/net');
+const { SCLIBRIDGE_CANDIDATES, findSclibridge } = require('../../core/savant');
 
 const CLIENT_PORT = 12000;
 const SAVANT_PORT = 12001;
 const EXEC_TIMEOUT_MS = 10000;
 const CLIENT_IDLE_TIMEOUT_MS = 15000;
 
-const SCLIBRIDGE_CANDIDATES = [
-  '/Users/Shared/Savant/Applications/RacePointMedia/sclibridge',
-  `${process.env.HOME}/Applications/RacePointMedia/sclibridge`,
-  '/usr/local/bin/sclibridge',
-];
-
 const VALID_COMMAND = /^(readstate|writestate|servicerequestcommand|servicerequest|userzones|statenames|settrigger|removetrigger)\b/;
-
-function findSclibridge(candidates = SCLIBRIDGE_CANDIDATES) {
-  return candidates.find((p) => {
-    try {
-      fs.accessSync(p, fs.constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  }) || null;
-}
 
 /**
  * "servicerequestcommand Zone-Component-...-Action:arg=val,arg=val" → the separate

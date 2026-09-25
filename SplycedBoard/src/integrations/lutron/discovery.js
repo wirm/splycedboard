@@ -6,28 +6,21 @@
  *   2. When that finds nothing, a direct look at the local /24: a processor is an address
  *      with both LEAP ports open, 8083 (pairing) and 8081 (LEAP). This works where multicast
  *      doesn't.
+ *   3. When that finds nothing either, advice: most often, macOS isn't letting SplycedBoard
+ *      onto the local network (core/local-network.js).
  *
- * Network errors are kept rather than swallowed. When macOS won't let SplycedBoard onto the
- * local network (Local Network privacy, macOS 15 and later), even hosts that certainly exist,
- * the router and the device the dashboard is open on, fail at once. The result then says so,
- * instead of just finding nothing.
+ * Network errors are logged rather than swallowed.
  */
 const net = require('net');
 const os = require('os');
-const { execFile } = require('child_process');
 const { Bonjour } = require('bonjour-service');
+const { tryConnect, adviceForEmptyScan } = require('../../core/local-network');
 
 const SERVICE_TYPES = ['lutron', 'leap'];
 const LEAP_PORT = 8081;
 const PAIRING_PORT = 8083;
 const EARLY_RETURN_GRACE_MS = 1000; // after the first find, wait this long for more
-const CONNECT_TIMEOUT_MS = 700;
 const SWEEP_CONCURRENCY = 64;
-const BLOCKED_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'EPERM', 'EACCES']);
-
-const BLOCKED_MESSAGE = "macOS isn't letting SplycedBoard reach devices on the local network. "
-  + 'On the Pro Host, open System Settings → Privacy & Security → Local Network and switch on '
-  + '"bun" (or "node"), then scan again.';
 
 /** mDNS browse. Resolves to { processors, problems } (problems: error codes seen). */
 function browse(timeoutMs, log) {
@@ -88,22 +81,6 @@ function browse(timeoutMs, log) {
   });
 }
 
-/** One TCP connection attempt: { ok, code, ms }. */
-function tryConnect(host, port, timeoutMs = CONNECT_TIMEOUT_MS) {
-  return new Promise((resolve) => {
-    const started = Date.now();
-    const socket = net.connect({ host, port });
-    const done = (ok, code) => {
-      clearTimeout(timer);
-      socket.destroy();
-      resolve({ ok, code, ms: Date.now() - started });
-    };
-    const timer = setTimeout(() => done(false, 'TIMEOUT'), timeoutMs);
-    socket.once('connect', () => done(true, null));
-    socket.once('error', (err) => done(false, err.code || 'ERROR'));
-  });
-}
-
 /** Every other address in the /24 around each of this machine's IPv4 addresses. */
 function localTargets() {
   const targets = new Set();
@@ -121,7 +98,7 @@ function localTargets() {
 }
 
 /** Addresses that have both LEAP ports open. */
-async function sweep(targets, { ports = [PAIRING_PORT, LEAP_PORT], timeoutMs = CONNECT_TIMEOUT_MS } = {}) {
+async function sweep(targets, { ports = [PAIRING_PORT, LEAP_PORT] } = {}) {
   const processors = [];
   let next = 0;
   const worker = async () => {
@@ -129,7 +106,7 @@ async function sweep(targets, { ports = [PAIRING_PORT, LEAP_PORT], timeoutMs = C
       const host = targets[next++];
       let open = true;
       for (const port of ports) {
-        if (!(await tryConnect(host, port, timeoutMs)).ok) {
+        if (!(await tryConnect(host, port)).ok) {
           open = false;
           break;
         }
@@ -141,48 +118,33 @@ async function sweep(targets, { ports = [PAIRING_PORT, LEAP_PORT], timeoutMs = C
   return processors.sort((a, b) => a.host.localeCompare(b.host, undefined, { numeric: true }));
 }
 
-/** The default gateway's IPv4 address (macOS `route`), or null. */
-function defaultGateway() {
-  return new Promise((resolve) => {
-    execFile('route', ['-n', 'get', 'default'], { timeout: 2000 }, (err, stdout) => {
-      resolve(err ? null : (String(stdout).match(/gateway:\s*(\d+\.\d+\.\d+\.\d+)/)?.[1] ?? null));
-    });
-  });
-}
-
-/**
- * Can this process reach the local network at all? Asks hosts that certainly exist. A
- * refused or accepted connection means yes; failing at once with "no route" (Local Network
- * privacy) means no; timeouts don't tell either way.
- */
-async function localNetworkBlocked(knownHosts, { connect = tryConnect } = {}) {
-  const hosts = [...new Set(knownHosts.filter((h) => h && net.isIPv4(h) && !h.startsWith('127.')))];
-  if (!hosts.length) return false;
-  const results = await Promise.all(hosts.map((h) => connect(h, 80, 1500)));
-  if (results.some((r) => r.ok || r.code === 'ECONNREFUSED')) return false;
-  return results.every((r) => BLOCKED_CODES.has(r.code));
-}
-
 /**
  * @param timeoutMs  how long the mDNS browse may take
  * @param client     address of the dashboard that asked (a host known to be on the network)
- * @returns { processors, problem } — problem: a message for the user, or null
+ * @param steps      replaces browse / sweep / advise (tests)
+ * @returns { processors, problem, hint }: problem when macOS is provably blocking the local
+ *          network, hint when nothing was found otherwise
  */
-async function discoverProcessors(timeoutMs = 5000, { log, client = null } = {}) {
-  const browsed = await browse(timeoutMs, log);
+async function discoverProcessors(timeoutMs = 5000, { log, client = null, steps = {} } = {}) {
+  const run = {
+    browse: () => browse(timeoutMs, log),
+    sweep: () => sweep(localTargets()),
+    advise: () => adviceForEmptyScan({ what: 'Lutron processors', fallback: 'Or add the processor by IP with Manual Entry.', client }),
+    ...steps,
+  };
+
+  const browsed = await run.browse();
   if (browsed.problems.length) log.warn(`mDNS problems while scanning: ${[...new Set(browsed.problems)].join(', ')}`);
-  if (browsed.processors.length) return { processors: browsed.processors, problem: null };
+  if (browsed.processors.length) return { processors: browsed.processors, problem: null, hint: null };
 
   log.info('mDNS found nothing; checking the local network for LEAP ports directly');
-  const processors = await sweep(localTargets());
+  const processors = await run.sweep();
   for (const p of processors) log.info(`Found: LEAP ports open at ${p.host}`);
-  if (processors.length) return { processors, problem: null };
+  if (processors.length) return { processors, problem: null, hint: null };
 
-  if (await localNetworkBlocked([client, await defaultGateway()])) {
-    log.warn(BLOCKED_MESSAGE);
-    return { processors: [], problem: BLOCKED_MESSAGE };
-  }
-  return { processors: [], problem: null };
+  const advice = await run.advise();
+  log.warn(advice.problem || advice.hint);
+  return { processors: [], ...advice };
 }
 
-module.exports = { discoverProcessors, sweep, tryConnect, localNetworkBlocked, BLOCKED_MESSAGE };
+module.exports = { discoverProcessors, sweep };

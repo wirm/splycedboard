@@ -1,22 +1,27 @@
 /**
- * Handles LEAP certificate-based pairing with Lutron QSX / RA3 processors.
+ * Handles LEAP certificate-based pairing with Lutron QSX / RA3 / Caséta processors.
  *
- * Flow (QSX LEAP protocol):
- *  1. Generate RSA key pair + CSR
- *  2. Connect to port 8083 with mutual TLS using the Lutron association cert.
- *     The QSX requires this specific Lutron-issued client certificate during the
- *     TLS handshake — without it the connection is dropped immediately.
- *  3. Processor sends an unsolicited status message on connect.
- *  4. Client sends an Execute /pair request with the CSR.
- *  5. User presses the physical pairing button on the QSX within 60s.
- *  6. Processor sends a SigningResult with the signed client cert + CA cert.
+ * Flow:
+ *  1. Generate an RSA key pair and a CSR.
+ *  2. Connect to port 8083 with mutual TLS, presenting the Lutron association certificate.
+ *     Without it the processor drops the connection at once.
+ *  3. Wait. The processor says nothing until it's put into pairing mode: on HomeWorks QSX,
+ *     a keypad button programmed for it in Designer (or Designer itself); on RA3 and
+ *     Caséta, the pairing button on the processor or bridge. Seen on QSX firmware 26.06.
+ *  4. In pairing mode it sends a status whose Permissions include "PhysicalAccess".
+ *  5. Send an Execute /pair request with the CSR.
+ *  6. The processor answers with a SigningResult: the signed client certificate and its CA.
+ *
+ * The wait in step 3 lasts PAIRING_TIMEOUT_MS: long enough to walk to a keypad.
  */
 const tls = require('tls');
 const crypto = require('crypto');
 const forge = require('node-forge');
 
 const PAIRING_PORT = 8083;
-const PAIRING_TIMEOUT_MS = 60000;
+const PAIRING_TIMEOUT_MS = 3 * 60 * 1000;
+const HOW_TO_PAIR = 'On HomeWorks QSX, press a keypad button programmed for pairing in Designer, or use '
+  + "Designer's pairing feature; on RA3 and Caséta, press the pairing button on the processor or bridge.";
 
 // Lutron association certificates required for mutual TLS on port 8083.
 // Source: https://github.com/thenewwazoo/lutron-leap-js/blob/main/src/Association.ts
@@ -128,24 +133,38 @@ async function generateKeyAndCSR(displayName) {
   };
 }
 
-async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
+/**
+ * @param signal     AbortSignal: stops waiting (a newer attempt replaced this one)
+ * @param port       pairing port (tests)
+ * @param timeoutMs  how long to wait for pairing mode (tests)
+ */
+async function pairWithProcessor(host, displayName = 'Savant Bridge', {
+  log, signal = null, port = PAIRING_PORT, timeoutMs = PAIRING_TIMEOUT_MS,
+}) {
   log.info('Generating key pair...');
   const { privateKey, csr } = await generateKeyAndCSR(displayName);
+  if (signal?.aborted) throw new Error('Pairing cancelled.');
 
-  log.info(`Connecting to ${host}:${PAIRING_PORT}...`);
+  log.info(`Connecting to ${host}:${port}...`);
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let heard = null; // permissions from the last status the processor sent, if any
     function done(err, result) {
       if (settled) return;
       settled = true;
+      signal?.removeEventListener('abort', onAbort);
       if (err) reject(err);
       else resolve(result);
+    }
+    function onAbort() {
+      socket.destroy();
+      done(new Error('Pairing cancelled: a newer attempt replaced it.'));
     }
 
     const socket = tls.connect({
       host,
-      port: PAIRING_PORT,
+      port,
       // Mutual TLS: present the Lutron association certificate.
       // The QSX requires this to keep the connection open.
       ca:   ASSOC_CA,
@@ -155,7 +174,18 @@ async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
       minVersion: 'TLSv1.2',
     });
 
-    socket.setTimeout(PAIRING_TIMEOUT_MS);
+    signal?.addEventListener('abort', onAbort);
+
+    // A hard deadline, not socket.setTimeout: that counts idle time, which the processor's
+    // silence before pairing mode is.
+    const deadline = setTimeout(() => {
+      socket.destroy();
+      const minutes = timeoutMs >= 60000 ? `${Math.round(timeoutMs / 60000)} minutes` : `${timeoutMs / 1000} s`;
+      done(new Error(heard
+        ? `The processor answered but didn't allow pairing (permissions: ${heard.join(', ') || 'none'}). ${HOW_TO_PAIR}`
+        : `The processor didn't go into pairing mode within ${minutes}. Click Pair Now, then: ${HOW_TO_PAIR}`));
+    }, timeoutMs);
+    socket.once('close', () => clearTimeout(deadline));
 
     let csrSent = false;
 
@@ -184,31 +214,35 @@ async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
     }
 
     socket.on('secureConnect', () => {
-      log.info('TLS connected — press the pairing button on the QSX now...');
+      log.info(`Connected. Waiting up to ${Math.round(timeoutMs / 1000)} s for the processor to go into pairing mode`);
     });
 
     let buffer = '';
 
     function processMessage(line) {
       if (!line.trim()) return;
-      log.debug(`← ${line.slice(0, 500)}`);
 
       let msg;
-      try { msg = JSON.parse(line); } catch { return; }
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        log.info(`← (not JSON) ${line.slice(0, 200)}`);
+        return;
+      }
 
       const statusCode  = msg.Header?.StatusCode || '';
       const contentType = msg.Header?.ContentType || '';
       const clientTag   = msg.Header?.ClientTag;
+      log.info(`← ${contentType || 'message'} ${statusCode}${clientTag ? ` (${clientTag})` : ''}`);
 
-      // Unsolicited server status — sent when button is pressed (PhysicalAccess granted)
+      // Unsolicited status: pairing mode grants PhysicalAccess
       if (!clientTag && contentType.startsWith('status')) {
         const permissions = msg.Body?.Status?.Permissions || [];
-        log.info(`Server status received — permissions: ${JSON.stringify(permissions)}`);
+        heard = permissions;
+        log.info(`Processor status: permissions ${JSON.stringify(permissions)}`);
         if (permissions.includes('PhysicalAccess')) {
-          log.info('PhysicalAccess granted — sending CSR...');
+          log.info('Pairing mode is on: sending the certificate request');
           sendCSR();
-        } else {
-          log.info('Waiting for button press on QSX...');
         }
         return;
       }
@@ -231,14 +265,9 @@ async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
       // Error response
       if (statusCode.startsWith('4') || statusCode.startsWith('5')) {
         socket.destroy();
-        const hint = statusCode.startsWith('401')
-          ? ' Press the pairing button on the QSX within 60s of clicking Pair.'
-          : '';
+        const hint = statusCode.startsWith('401') ? ` Click Pair Now, then: ${HOW_TO_PAIR}` : '';
         done(new Error(`Processor rejected pairing (${statusCode}).${hint} Body: ${JSON.stringify(msg.Body)}`));
-        return;
       }
-
-      log.info(`Received message (tag=${clientTag}, type=${contentType})`);
     }
 
     socket.on('data', (chunk) => {
@@ -253,13 +282,6 @@ async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
       }
     });
 
-    socket.on('timeout', () => {
-      socket.destroy();
-      done(new Error(
-        'Pairing timed out (60s). Make sure to press the pairing button on the QSX within 60s of clicking Pair.'
-      ));
-    });
-
     socket.on('error', (err) => {
       done(new Error(`Pairing connection error: ${err.message}`));
     });
@@ -270,4 +292,4 @@ async function pairWithProcessor(host, displayName = 'Savant Bridge', { log }) {
   });
 }
 
-module.exports = { pairWithProcessor };
+module.exports = { pairWithProcessor, PAIRING_TIMEOUT_MS };

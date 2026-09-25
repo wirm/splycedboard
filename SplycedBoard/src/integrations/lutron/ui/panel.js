@@ -85,11 +85,11 @@
     }, 1000);
 
     try {
-      const { processors, problem } = await api('GET', `/discover?timeout=${SCAN_TIMEOUT}`);
+      const { processors, problem, hint } = await api('GET', `/discover?timeout=${SCAN_TIMEOUT}`);
       if (problem) {
         list.innerHTML = `<div class="alert alert-error show">${esc(problem)}</div>`;
       } else if (!processors.length) {
-        list.innerHTML = '<div style="font-size:13px; color:var(--muted); padding:12px">No processors found. Try manual entry, or check that LEAP is enabled.</div>';
+        list.innerHTML = `<div class="alert alert-warn show">${esc(hint || 'No processors found. Try Manual Entry, or check that LEAP is enabled.')}</div>`;
       } else {
         list.innerHTML = `<div class="processor-list">${processors.map((p, i) => `
           <div class="processor-item" data-index="${i}" onclick="Lutron.selectProcessor(this)">
@@ -137,25 +137,40 @@
 
   // ── Pairing ──────────────────────────────────────────────────────────────
 
+  // How long SplycedBoard waits for pairing mode (PAIRING_TIMEOUT_MS in pairing.js).
+  const PAIRING_WINDOW_S = 180;
+  const HOW_TO_PAIR = 'On HomeWorks QSX, press a keypad button programmed for pairing in Designer, or use '
+    + "Designer's pairing feature. On RA3 and Caséta, press the pairing button on the processor or bridge.";
+
   async function startPairing() {
     if (!selectedProcessor) return;
     const btn = $('pairBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<div class="spinner"></div> Pairing…';
-    showAlert('pairAlert', 'info', 'Connecting to processor on port 8083… (make sure pairing mode is active)');
+    btn.innerHTML = '<div class="spinner"></div> Waiting… click to start over';
+
+    let left = PAIRING_WINDOW_S;
+    const countdown = () => {
+      const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      showAlert('pairAlert', 'info', `Now put the processor into pairing mode (${time} left). ${HOW_TO_PAIR}`);
+    };
+    countdown();
+    clearInterval(startPairing.timer);
+    const timer = setInterval(() => { left = Math.max(0, left - 1); countdown(); }, 1000);
+    startPairing.timer = timer;
 
     try {
       await post('/pair', { host: selectedProcessor.host, name: selectedProcessor.name });
+      clearInterval(timer);
       showAlert('pairAlert', 'success', '✓ Paired successfully! Connecting to processor…');
       markStep('step2Num');
       markStep('step3Num');
       await reconnect();
       refresh();
     } catch (err) {
+      if (startPairing.timer !== timer) return; // replaced by a newer attempt
+      clearInterval(timer);
       showAlert('pairAlert', 'error', `Pairing failed: ${err.message}`);
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<span>🔐</span> Pair Now';
+      if (startPairing.timer === timer) btn.innerHTML = '<span>🔐</span> Pair Now';
     }
   }
 

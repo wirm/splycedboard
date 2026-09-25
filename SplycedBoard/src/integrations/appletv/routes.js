@@ -19,6 +19,7 @@ const express = require('express');
 
 const { COMMANDS } = require('./device');
 const { scan, probe } = require('./discovery');
+const { adviceForEmptyScan } = require('../../core/local-network');
 
 // Savant action names and other spellings → our command names
 const ALIASES = {
@@ -111,8 +112,15 @@ function createRoutes(atv) {
   router.get('/discover', handle(async (req) => {
     const timeoutMs = Math.min(parseInt(req.query.timeout, 10) || 4000, 15000);
     const found = await scan({ timeoutMs });
+    if (!found.length) {
+      // Most often macOS keeping SplycedBoard off the local network (core/local-network.js).
+      const client = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+      const advice = await adviceForEmptyScan({ what: 'Apple TVs', fallback: 'Or enter its IP address below.', client });
+      log.warn(advice.problem || advice.hint);
+      return { appleTvs: [], ...advice };
+    }
     const paired = new Set(atv.list().map((d) => d.address));
-    return { appleTvs: found.map((tv) => ({ ...tv, paired: paired.has(tv.address) })) };
+    return { appleTvs: found.map((tv) => ({ ...tv, paired: paired.has(tv.address) })), problem: null, hint: null };
   }));
 
   router.get('/probe', handle(async (req) => {

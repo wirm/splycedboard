@@ -140,10 +140,12 @@
     const list = $('atvScanList');
     list.innerHTML = '<div class="loader" style="padding:20px"><div class="spinner"></div> Looking for Apple TVs…</div>';
     try {
-      const { appleTvs } = await ctx.api('GET', '/discover?timeout=4000');
+      const { appleTvs, problem, hint } = await ctx.api('GET', '/discover?timeout=4000');
       found = appleTvs;
       if (!appleTvs.length) {
-        list.innerHTML = '<div class="setting-desc" style="padding:8px 0">None found on this network segment — enter the IP address below.</div>';
+        list.innerHTML = problem
+          ? `<div class="alert alert-error show">${esc(problem)}</div>`
+          : `<div class="alert alert-warn show">${esc(hint || 'None found on this network segment. Enter the IP address below.')}</div>`;
         return;
       }
       list.innerHTML = appleTvs.map((tv, i) => `

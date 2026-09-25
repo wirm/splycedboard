@@ -291,4 +291,53 @@ function seedDataDir(dataDir, port) {
   }, null, 2));
 }
 
-module.exports = { startMockProcessor, makeClientCerts, seedDataDir };
+/**
+ * The processor's pairing port (8083), as QSX firmware 26.06 behaves: silent after the TLS
+ * handshake until put into pairing mode, then a status granting PhysicalAccess; a CSR sent
+ * after that is answered with a SigningResult.
+ *
+ *   const p = await startMockPairing();
+ *   p.pairingMode(['Public', 'PhysicalAccess'])   // what pressing the keypad button does
+ */
+async function startMockPairing({ answer = 'sign' } = {}) {
+  const { cert, key } = selfSigned('homeworksqs-mock-server');
+  const sockets = new Set();
+  const requests = [];
+  const server = tls.createServer({ cert, key, requestCert: true, rejectUnauthorized: false }, (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+    socket.on('error', () => {});
+    let buffer = '';
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop();
+      for (const line of lines.filter(Boolean)) {
+        const request = JSON.parse(line);
+        requests.push(request);
+        const reply = answer === 'sign'
+          ? { Header: { StatusCode: '200 OK', ContentType: 'signing-result;plurality=single', ClientTag: 'get-cert' },
+              Body: { SigningResult: { Certificate: 'SIGNED-CERT', RootCertificate: 'ROOT-CA' } } }
+          : { Header: { StatusCode: '401 Unauthorized', ContentType: 'exception;plurality=single', ClientTag: 'get-cert' },
+              Body: { Message: 'not allowed' } };
+        socket.write(JSON.stringify(reply) + '\r\n');
+      }
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return {
+    port: server.address().port,
+    requests,
+    connections: () => sockets.size,
+    pairingMode(permissions = ['Public', 'PhysicalAccess']) {
+      const status = { Header: { StatusCode: '200 OK', ContentType: 'status;plurality=single' }, Body: { Status: { Permissions: permissions } } };
+      for (const socket of sockets) socket.write(JSON.stringify(status) + '\r\n');
+    },
+    close() {
+      for (const socket of sockets) socket.destroy();
+      return new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+module.exports = { startMockProcessor, startMockPairing, makeClientCerts, seedDataDir };

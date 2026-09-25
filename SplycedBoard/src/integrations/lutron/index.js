@@ -52,6 +52,7 @@ class LutronIntegration {
   }
 
   async stop() {
+    this.pairing?.abort();
     this._disconnect();
     await this.telnet.stop();
   }
@@ -114,8 +115,17 @@ class LutronIntegration {
   }
 
   async pair(host, name) {
+    // Clicking Pair again replaces an attempt still waiting for pairing mode.
+    this.pairing?.abort();
+    const pairing = new AbortController();
+    this.pairing = pairing;
     this.log.info(`Pairing with ${host}...`);
-    const result = await pairWithProcessor(host, name || 'Savant Bridge', { log: this.log.child('pairing') });
+    let result;
+    try {
+      result = await pairWithProcessor(host, name || 'Savant Bridge', { log: this.log.child('pairing'), signal: pairing.signal });
+    } finally {
+      if (this.pairing === pairing) this.pairing = null;
+    }
 
     const processorId = host.replace(/[^a-zA-Z0-9]/g, '-');
     this.certs.save(processorId, result);

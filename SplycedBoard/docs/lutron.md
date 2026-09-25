@@ -32,9 +32,15 @@ In **HomeWorks Designer** (QSX) or **RA3 Setup**:
 1. Open the dashboard (`http://<pro-host-ip>:47200`) → **Lutron LEAP** → **Setup**.
 2. Click **Scan Network**. Processors found over mDNS appear as clickable items. If yours
    doesn't show up (VLANs and managed switches often block mDNS), use **Manual Entry**.
-3. Select the processor and click **Pair Now**.
-4. **Within 30 seconds**, press the pairing button (or enable pairing mode in Designer).
+3. Select the processor and click **Pair Now**. SplycedBoard connects and waits; the
+   dashboard counts down.
+4. **Within 3 minutes**, put the processor into pairing mode. On HomeWorks QSX, press the keypad
+   button programmed for pairing, or use Designer's pairing feature; the processor has no
+   pairing button of its own. On RA3 and Caséta, press the pairing button on the processor or
+   bridge. The processor stays silent until then, and pairing mode turned on *before* Pair Now
+   may not count.
 5. On success SplycedBoard connects and loads the inventory, and the status turns green.
+   Clicking **Pair Now** again during the wait starts over.
 
 ---
 
@@ -177,10 +183,17 @@ later ask before a program talks to local devices. On the Pro Host, open **Syste
 Privacy & Security → Local Network** and switch on **bun** (or **node**), then scan again.
 Until then, pairing and the LEAP connection fail too, typically with "No route to host".
 
-**Pairing times out or fails with "Connection error".**
+**"The processor didn't go into pairing mode within 3 minutes."** The connection worked, but
+the processor never said pairing was allowed.
+- Turn pairing mode on *after* clicking Pair Now, while the dashboard counts down.
+- On QSX, check that the keypad button is programmed for pairing in Designer, and that the
+  Designer project with it has been transferred to the processor.
 - LEAP must be enabled (and on some QSX firmware, licensed) in HomeWorks Designer.
-- Pairing mode must be active **before** you click Pair Now; the window is about 30 s.
-- Port 8083 must be reachable: `nc -zv <processor-ip> 8083`.
+- The Logs page (filter: Lutron LEAP) shows every message the processor sent during pairing.
+
+**Pairing fails with "Connection error".** Port 8083 must be reachable from the Pro Host:
+`nc -zv <processor-ip> 8083`. On macOS 15 and later, also check the Local Network setting
+(below).
 
 **"Pairing rejected by processor".** Pairing mode wasn't active, the processor has too many
 paired clients, or LEAP is disabled or unlicensed.

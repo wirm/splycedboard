@@ -241,7 +241,7 @@ test('lighting export: keypad buttons only when asked, as Blueprint writes Keypa
   assert.deepEqual(rows.map((r) => r.Identifier), rows.map((_, i) => String(i)), 'numbered on from the lights');
   assert.ok(lights.length && rows.indexOf(keys[0]) === lights.length, 'after the lights');
 
-  const welcome = keys.find((r) => r.Label === 'Entry Welcome');
+  const welcome = keys.find((r) => r.Label === 'Welcome');
   assert.deepEqual(Object.keys(welcome).sort(), BLUEPRINT_KEYPAD_ROW_KEYS);
   assert.deepEqual([welcome.Address1, welcome.Address2, welcome.Address3], ['501', '1', '801']);
   assert.deepEqual([welcome.Command, welcome['Command Type'], welcome['UI Type'], welcome.SavantAppGrouping], ['ButtonPress', 'Push Command', 'Toggle', 'Scene']);
@@ -255,13 +255,13 @@ test('lighting export: keypad buttons only when asked, as Blueprint writes Keypa
   ]);
   assert.deepEqual(Object.keys(welcome.UITypeChild[0]).sort(), BLUEPRINT_KEYPAD_CHILD_KEYS);
 
-  // In faceplate order; raise and lower have no LED
-  assert.deepEqual(keys.filter((r) => r.Address1 === '501').map((r) => r.Label), [
-    'Entry Welcome', 'Entry Cooking', 'Entry Dinner', 'Entry Night', 'Entry All Off', 'Entry Lower', 'Entry Raise',
-  ]);
-  const raise = keys.find((r) => r.Label === 'Entry Raise');
+  // Labeled with the button's own name, in faceplate order; raise and lower have no LED
+  assert.deepEqual(keys.filter((r) => r.Address1 === '501').map((r) => [r.Label, r['Button Label'], r['Toggle Label']].join('|')), [
+    'Welcome', 'Cooking', 'Dinner', 'Night', 'All Off', 'Lower', 'Raise',
+  ].map((l) => `${l}|${l}|${l}`));
+  const raise = keys.find((r) => r.Address1 === '501' && r.Label === 'Raise');
   assert.deepEqual([raise.Address2, raise.Address3, raise.State1.RPMStateName.endsWith('IsCurrentLEDOn_501_0')], ['19', '', true]);
-  assert.deepEqual(Object.keys(keys.find((r) => r.Label === 'Bedside Bright')['Savant Zone']), ['Primary Suite'], 'under its Lutron area until mapped');
+  assert.deepEqual(Object.keys(keys.find((r) => r.Address1 === '502' && r.Label === 'Bright')['Savant Zone']), ['Primary Suite'], 'under its Lutron area until mapped');
 });
 
 test('telnet bridge: initial state, commands, queries and LED feedback', async () => {

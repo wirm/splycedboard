@@ -117,8 +117,10 @@ the way Blueprint writes one:
 - **Actions:** press and release.
 - **State:** the button's LED.
 
-Rows are labeled with the keypad's name ("Entry Welcome") and go in the Savant zones that
-keypad's Lutron area went in on the Rooms tab. Raise and lower come too; they have no LED.
+Rows are labeled with the button's own name, as engraved in Designer ("All Lights"), and go
+in the Savant zones that keypad's Lutron room went in on the Rooms tab. Raise and lower come
+too, labeled "Raise" and "Lower"; they have no LED. A button with no engraving keeps Lutron's
+name for it ("Button 6").
 
 ### Rooms: Lutron Areas → Savant Blueprint Zones
 

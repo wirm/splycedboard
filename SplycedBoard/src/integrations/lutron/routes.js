@@ -60,10 +60,10 @@ function exportedKeypadButtons(controller, rooms) {
     const areaId = controller.devices.get(bg.deviceId)?.areaId;
     for (const b of bg.buttons) {
       if (b.number == null) continue;
-      const what = b.role === 'raise' ? 'Raise' : b.role === 'lower' ? 'Lower' : (b.engraving || b.name);
       out.push({
         keypad: bg.deviceName,
-        label: `${bg.deviceName} ${what}`,
+        // The button's own name, as engraved: "All Lights", "Raise"
+        label: b.role === 'raise' ? 'Raise' : b.role === 'lower' ? 'Lower' : (b.engraving || b.name),
         deviceId: bg.deviceId,
         number: b.number,
         ledId: b.ledId,

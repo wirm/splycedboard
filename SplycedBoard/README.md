@@ -147,12 +147,14 @@ install, src/, public/  the app itself
 
 ## Connecting an integration to Savant
 
-1. Download the integration's profile (dashboard or `profiles/`) on the Mac that runs
-   Blueprint. Add it to your profile library in Blueprint's Preferences. On older Blueprint,
-   copy it into `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/`
+1. Download the integration's profile from the dashboard on the Mac that runs Blueprint. It
+   comes as a zip holding a folder with the profile inside, so a second download numbers the
+   folder, never the file. You can also take it from `profiles/`. Add it to your profile
+   library in Blueprint's Preferences. On older Blueprint, copy it into
+   `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/`
    and restart Blueprint. **Keep the file name.** Blueprint finds a profile by its
-   `<manufacturer>_<model>` file name, so a renamed copy (even `… (1).xml` from a second download)
-   gives "Component not found".
+   `<manufacturer>_<model>` file name, so a renamed copy (even `… (1).xml`) gives "Component
+   not found".
 2. Add the component in Blueprint and set its address to `127.0.0.1`. SplycedBoard runs on
    the Pro Host itself. HTTP profiles use port `47200`.
 3. Fill in the data tables using the IDs shown on the integration's dashboard page, then

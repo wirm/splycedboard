@@ -39,9 +39,10 @@ updates and restarts; back that folder up.
 
 ## 2 · Blueprint
 
-1. Download the profile from the dashboard (or take `profiles/apple_apple tv (splycedboard).xml`)
-   on the Mac that runs Blueprint. Add it to your profile library in Blueprint's Preferences. On
-   older Blueprint, copy it into
+1. Download the profile from the dashboard on the Mac that runs Blueprint. It comes as a zip:
+   open it for a folder with `apple_apple tv (splycedboard).xml` inside. You can also take it
+   from SplycedBoard's `profiles/` folder. Add it to your profile library in Blueprint's
+   Preferences. On older Blueprint, copy it into
    `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/` and
    restart Blueprint. Keep the file name: Blueprint finds a profile by its
    `<manufacturer>_<model>` file name, so a renamed copy gives "Component not found".

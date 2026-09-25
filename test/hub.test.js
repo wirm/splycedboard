@@ -97,6 +97,36 @@ test('hub settings toggle verbose logging', async () => {
   }
 });
 
+// A zip holding "<profile> <version>/<profile>.xml": unzipped, the file keeps the exact name
+// Blueprint needs, however the browser renamed the zip ("… (1).zip").
+test('profiles download as a zip with the file in a folder, or bare with ?format=xml', async () => {
+  const { crc32 } = require('../SplycedBoard/src/core/zip');
+  assert.equal(crc32(Buffer.from('123456789')).toString(16), 'cbf43926', 'the standard CRC-32 check value');
+
+  h.setEnabled({ lutron: false, scli: false });
+  const hub = await h.startHub();
+  try {
+    const xmlFile = path.join(paths.PROFILES_DIR, 'lutron_leap bridge.xml');
+    const version = fs.readFileSync(xmlFile, 'utf8').match(/rpm_xml_version="([^"]+)"/)[1];
+    const res = await fetch(`${hub.base}/api/hub/integrations/lutron/profile`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/zip');
+    assert.match(res.headers.get('content-disposition'), new RegExp(`filename="lutron_leap bridge ${version.replace('.', '\\.')}\\.zip"`));
+
+    const zipFile = path.join(h.HOME, 'profile.zip');
+    fs.writeFileSync(zipFile, Buffer.from(await res.arrayBuffer()));
+    const folder = `lutron_leap bridge ${version}`;
+    assert.deepEqual(execFileSync('unzip', ['-Z1', zipFile], { encoding: 'utf8' }).trim().split('\n'), [`${folder}/`, `${folder}/lutron_leap bridge.xml`]);
+    assert.ok(execFileSync('unzip', ['-p', zipFile, `${folder}/lutron_leap bridge.xml`]).equals(fs.readFileSync(xmlFile)), 'the XML comes out unchanged');
+
+    const bare = await fetch(`${hub.base}/api/hub/integrations/lutron/profile?format=xml`);
+    assert.match(bare.headers.get('content-disposition'), /filename="lutron_leap bridge\.xml"/);
+    assert.equal(await bare.text(), fs.readFileSync(xmlFile, 'utf8'));
+  } finally {
+    await hub.stop();
+  }
+});
+
 test('plist writer escapes text and nests containers', () => {
   const xml = toPlist({ Name: 'A & <B>', Flags: [true, false], Nested: { Count: 3, Empty: [] } });
   assert.equal(xml, [

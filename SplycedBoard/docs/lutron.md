@@ -48,17 +48,22 @@ In **HomeWorks Designer** (QSX) or **RA3 Setup**:
 
 ### Install the profile
 
-Download it from the dashboard (or take `profiles/lutron_leap bridge.xml`) on the Mac that runs
-Blueprint. Add it to your profile library in Blueprint's Preferences. On older Blueprint, copy it
-into Blueprint's profile folder instead and restart Blueprint:
+Download it from the dashboard on the Mac that runs Blueprint. It comes as a zip: open it
+and you get a folder, such as `lutron_leap bridge 1.14`, with `lutron_leap bridge.xml` inside.
+Downloading again numbers the folder, never the file. You can also take
+`profiles/lutron_leap bridge.xml` straight from SplycedBoard's folder.
+
+Add the file to your profile library in Blueprint's Preferences, replacing the old one. On
+older Blueprint, copy it into Blueprint's profile folder instead and restart Blueprint:
 
 ```
 ~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/
 ```
 
-Keep the file name `lutron_leap bridge.xml`. Blueprint finds a profile by its
-`<manufacturer>_<model>` file name, so a renamed copy (even `… (1).xml` from a second download)
-gives "Component not found".
+Keep the file name `lutron_leap bridge.xml` exactly. Blueprint finds a profile by its
+`<manufacturer>_<model>` file name. A renamed copy, even `… (1).xml` from a browser's second
+download, gives "Component not found" when you add the device and "Can't replace profile" when
+you update one.
 
 From version 1.12, the profile reports its version to SplycedBoard. The dashboard's Overview
 warns when Savant runs a different version than SplycedBoard ships. Configurations still on

@@ -19,6 +19,8 @@ const WebSocket = require('ws');
 const logger = require('../core/log');
 const paths = require('../core/paths');
 const { listen, close } = require('../core/net');
+const { zip } = require('../core/zip');
+const { readProfile } = require('../core/profiles');
 
 const WEB_PORT = Number(process.env.SPLYCEDBOARD_WEB_PORT) || 47200;
 
@@ -145,12 +147,23 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
     }
   });
 
+  // A zip holding "<profile> <version>/<profile>.xml": a browser renames a second download to
+  // "… (1)", and Blueprint only finds a profile under its exact file name. Unzipped, the file
+  // inside keeps it. ?format=xml: the bare file.
   api.get('/integrations/:id/profile', (req, res, next) => {
     try {
       const { profile } = hub.describe(req.params.id);
       const file = profile && path.join(paths.PROFILES_DIR, profile);
       if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'This integration has no Savant profile' });
-      res.download(file, profile);
+      if (req.query.format === 'xml') return res.download(file, profile);
+      const { version } = readProfile(file);
+      const folder = `${profile.replace(/\.xml$/, '')}${version ? ` ${version}` : ''}`;
+      const archive = zip([
+        { name: `${folder}/`, data: '' },
+        { name: `${folder}/${profile}`, data: fs.readFileSync(file), date: fs.statSync(file).mtime },
+      ]);
+      res.attachment(`${folder}.zip`);
+      res.type('application/zip').send(archive);
     } catch (err) {
       next(err);
     }

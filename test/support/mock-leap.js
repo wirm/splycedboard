@@ -265,12 +265,18 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
       }
       return 201;
     }
+    // As a QSX takes them: PressAndRelease is a tap and runs a scene button (here: toggles its
+    // LED); PressAndHold is a hold, which runs nothing on a scene button, until Release.
     if ((m = url.match(/^\/button\/(\d+)\/commandprocessor$/))) {
       const b = buttonById(Number(m[1]));
       if (!b) return 404;
-      const event = cmd.CommandType === 'Release' ? 'Release' : 'Press';
-      setImmediate(() => push({ ButtonStatus: { Button: { href: `/button/${b.id}` }, ButtonEvent: { EventType: event } } }));
-      if (event === 'Press' && b.led) {
+      const type = cmd.CommandType;
+      if (!['PressAndRelease', 'PressAndHold', 'Release'].includes(type)) return 400;
+      b.commands = [...(b.commands || []), type];
+      const event = (e) => setImmediate(() => push({ ButtonStatus: { Button: { href: `/button/${b.id}` }, ButtonEvent: { EventType: e } } }));
+      if (type !== 'Release') event('Press');
+      if (type !== 'PressAndHold') event('Release');
+      if (type === 'PressAndRelease' && b.led) {
         b.ledState = b.ledState === 'On' ? 'Off' : 'On';
         setImmediate(() => push({ LEDStatus: { LED: { href: `/led/${b.led}` }, State: b.ledState } }));
       }

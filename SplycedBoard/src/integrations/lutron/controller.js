@@ -19,7 +19,7 @@
  *  'disconnect'        LEAP disconnected
  */
 const { EventEmitter } = require('events');
-const { keypadLayout, buttonRole } = require('./keypads');
+const { keypadLayout, keypadFamily, buttonRole } = require('./keypads');
 const { LeapClient } = require('./leap-client');
 
 // Maps LEAP ControlType to our simplified type
@@ -655,17 +655,41 @@ class LeapController extends EventEmitter {
   }
 
   // ─── Physical Button ───────────────────────────────────────────────────────
+  //
+  // A scene button is tapped: PressAndRelease, as a finger does, on press; its release has
+  // nothing left to do. PressAndHold + Release on a scene button is a *hold*: a QSX flashes
+  // the LED and runs nothing. Raise and lower are held: PressAndHold ramps until Release.
 
-  async pressButton(buttonHref) {
-    return this.client.request('CreateRequest', `${buttonHref}/commandprocessor`, {
-      Command: { CommandType: 'PressAndHold' },
-    });
+  _command(buttonHref, type) {
+    this.log.debug(`→ button ${buttonHref} ${type}`);
+    return this.client.request('CreateRequest', `${buttonHref}/commandprocessor`, { Command: { CommandType: type } });
   }
 
+  /** Whether a button raises or lowers (held to ramp), rather than being tapped. */
+  _isRamp(buttonHref) {
+    for (const bg of this.buttonGroups.values()) {
+      const btn = bg.buttons.find((b) => b.href === buttonHref);
+      if (!btn) continue;
+      const device = this.devices.get(bg.deviceId);
+      return buttonRole(btn, keypadFamily(device?.type, device?.modelNumber).id) !== 'button';
+    }
+    return false;
+  }
+
+  /** The button goes down: a scene button is tapped, raise/lower starts ramping. */
+  pressButton(buttonHref) {
+    return this._command(buttonHref, this._isRamp(buttonHref) ? 'PressAndHold' : 'PressAndRelease');
+  }
+
+  /** The button comes up: raise/lower stops; a scene button was already tapped. */
   async releaseButton(buttonHref) {
-    return this.client.request('CreateRequest', `${buttonHref}/commandprocessor`, {
-      Command: { CommandType: 'Release' },
-    });
+    if (this._isRamp(buttonHref)) return this._command(buttonHref, 'Release');
+    return null;
+  }
+
+  /** Press and let go at once, for a raise/lower too (a single step). */
+  tapButton(buttonHref) {
+    return this._command(buttonHref, 'PressAndRelease');
   }
 
   // ─── Thermostat Control ────────────────────────────────────────────────────

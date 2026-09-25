@@ -231,7 +231,7 @@ keep working unchanged.
 | `GET /api/lutron/area/level?id=&level=` | Set every load in an area |
 | `GET /api/lutron/shade/level?id=&level=` · `shade/raise\|lower\|stop` | Shades |
 | `GET /api/lutron/scene/recall?id=` | Recall a virtual button |
-| `GET /api/lutron/button?device=&num=&action=` | `press`, `release`, `hold`, `pressrelease` |
+| `GET /api/lutron/button?device=&num=&action=` | `press` taps a scene button (LEAP `PressAndRelease`) and starts a raise/lower ramping; `release` stops the ramp; `pressrelease` taps. A LEAP hold (`PressAndHold`) on a scene button runs nothing on a QSX |
 | `GET /api/lutron/color?id=&level=&r=&g=&b=&w=` | Ketra color; with color values, `level=0` keeps the current brightness |
 | `GET /api/lutron/cct?id=&level=` | Color temperature: 0 → 1400 K … 100 → 10000 K |
 | `GET /api/lutron/hvac/status?id=` | Thermostat state for the profile |

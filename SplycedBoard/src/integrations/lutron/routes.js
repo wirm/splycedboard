@@ -352,13 +352,10 @@ function createRoutes(lutron) {
     const href = c.findButtonHref(int(device, 'device'), int(buttonNum, 'num'));
     if (!href) throw httpError(404, 'Button not found');
 
+    // press: a scene button is tapped, raise/lower starts ramping; release: raise/lower stops
     if (action === 'press' || action === 'hold') await c.pressButton(href);
     else if (action === 'release') await c.releaseButton(href);
-    else {
-      await c.pressButton(href); // pressrelease
-      await new Promise((r) => setTimeout(r, 100));
-      await c.releaseButton(href);
-    }
+    else await c.tapButton(href); // pressrelease
   }));
 
   // ── Savant profile: color (HTTP carries the bleColor args that TCP can't) ──

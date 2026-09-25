@@ -191,12 +191,26 @@ test('thermostat status and setpoints', async () => {
   assert.equal((await hub.get('/api/hvac/mode?id=302')).status, 400);
 });
 
-test('keypad buttons by device + button number', async () => {
-  const before = mock.received.length;
-  assert.equal((await hub.get('/api/button?device=501&num=2&action=pressrelease')).status, 200);
-  const sent = mock.received.slice(before).filter((r) => r.url === '/button/702/commandprocessor').map((r) => r.body.Command.CommandType);
-  assert.deepEqual(sent, ['PressAndHold', 'Release']);
+// A finger taps a scene button: PressAndRelease. PressAndHold + Release is a hold, which on a
+// QSX runs nothing (the LED flashes). Raise and lower are held: PressAndHold, then Release.
+test('keypad buttons by device + button number: scene buttons tapped, raise/lower held', async () => {
+  const sentTo = async (button, calls) => {
+    const before = mock.received.length;
+    for (const url of calls) assert.equal((await hub.get(url)).status, 200, url);
+    return mock.received.slice(before).filter((r) => r.url === `/button/${button}/commandprocessor`).map((r) => r.body.Command.CommandType);
+  };
+  // Savant's Keypad Button row: ButtonPress on touch, ButtonRelease on let go
+  assert.deepEqual(await sentTo(702, ['/api/button?device=501&num=2&action=press', '/api/button?device=501&num=2&action=release']), ['PressAndRelease']);
+  assert.deepEqual(await sentTo(702, ['/api/button?device=501&num=2&action=pressrelease']), ['PressAndRelease']);
+  assert.deepEqual(await sentTo(719, ['/api/button?device=501&num=19&action=press', '/api/button?device=501&num=19&action=release']), ['PressAndHold', 'Release'], 'raise ramps while held');
   assert.equal((await hub.get('/api/button?device=501&num=9')).status, 404);
+
+  // The dashboard's keys: the same
+  const before = mock.received.length;
+  await hub.post('/api/lutron/button/press', { href: '/button/703' });
+  await hub.post('/api/lutron/button/release', { href: '/button/703' });
+  assert.deepEqual(mock.received.slice(before).filter((r) => r.url === '/button/703/commandprocessor').map((r) => r.body.Command.CommandType), ['PressAndRelease']);
+  await h.waitFor(async () => (await hub.get('/api/lutron/inventory')).json.buttonGroups.find((g) => g.deviceId === 501).buttons.find((b) => b.number === 3).ledState === 'On', { what: 'Dinner lit by the tap' });
 });
 
 test('lighting export is a plist with every light', async () => {

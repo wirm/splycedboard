@@ -8,14 +8,14 @@
 <!-- Splyced's typefaces (www.splyced.pro); without internet the system fonts stand in -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@400;500;600;700&family=Yellowtail&display=swap">
 <link rel="stylesheet" href="/css/app.css">
 <script>
-  // Settings → Theme, applied before the first paint (the default follows the system)
+  // Settings → Theme, applied before the first paint. Default: Splyced's cream.
   try {
     const theme = localStorage.getItem('splycedboard.theme');
-    if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
-  } catch { /* storage unavailable: follow the system */ }
+    if (theme === 'dark' || theme === 'auto') document.documentElement.dataset.theme = theme;
+  } catch { /* storage unavailable: cream */ }
 </script>
 </head>
 <body>
@@ -25,7 +25,7 @@
     <button class="menu-btn" id="menuBtn" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">☰</button>
     <a class="logo" href="#/">
       <img class="logo-mark" src="/img/logo.svg" alt="" width="34" height="32">
-      <span>SplycedBoard</span>
+      <span>Splyced<span class="script">Board</span></span>
     </a>
   </div>
   <div class="topbar-right">
@@ -56,7 +56,7 @@
     <!-- ═══════════════════════════════ OVERVIEW ═══════════════════════════════ -->
     <section class="page" id="page-overview">
       <div class="page-body">
-        <div class="page-head">
+        <div class="page-head stars">
           <h1>Integrations</h1>
           <p>Each integration connects one outside system to Savant. Switch them on or off here —
             changes take effect immediately, no restart needed.</p>
@@ -105,7 +105,7 @@
     <!-- ═══════════════════════════════ SETTINGS ═══════════════════════════════ -->
     <section class="page" id="page-settings">
       <div class="page-body">
-        <div class="page-head"><h1>Settings</h1></div>
+        <div class="page-head stars"><h1>Settings</h1></div>
 
         <div class="two-col">
           <div>
@@ -160,13 +160,13 @@
               <div class="setting-row">
                 <div>
                   <div class="setting-name">Theme</div>
-                  <div class="setting-desc">Splyced's dark or cream look. Automatic follows this device's
-                    light or dark mode. Kept in this browser only.</div>
+                  <div class="setting-desc">Splyced's cream paper, or the dark of its night sections. Automatic
+                    follows this device's light or dark mode. Kept in this browser only.</div>
                 </div>
                 <select id="themeSelect" aria-label="Theme" style="width:auto">
-                  <option value="auto">Automatic</option>
-                  <option value="light">Light</option>
+                  <option value="light">Cream</option>
                   <option value="dark">Dark</option>
+                  <option value="auto">Automatic</option>
                 </select>
               </div>
             </div>

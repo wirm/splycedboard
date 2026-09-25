@@ -524,13 +524,13 @@ const SB = (() => {
   function initTheme() {
     const select = $('themeSelect');
     const saved = () => { try { return localStorage.getItem('splycedboard.theme'); } catch { return null; } };
-    select.value = ['light', 'dark'].includes(saved()) ? saved() : 'auto';
+    select.value = ['dark', 'auto'].includes(saved()) ? saved() : 'light';
     select.addEventListener('change', () => {
-      const theme = select.value;
-      if (theme === 'auto') delete document.documentElement.dataset.theme;
+      const theme = select.value; // light (cream, the default) | dark | auto
+      if (theme === 'light') delete document.documentElement.dataset.theme;
       else document.documentElement.dataset.theme = theme;
       try {
-        if (theme === 'auto') localStorage.removeItem('splycedboard.theme');
+        if (theme === 'light') localStorage.removeItem('splycedboard.theme');
         else localStorage.setItem('splycedboard.theme', theme);
       } catch { /* not kept: this page load only */ }
     });

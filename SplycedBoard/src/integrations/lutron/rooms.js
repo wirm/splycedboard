@@ -1,9 +1,10 @@
 /**
- * Which Savant room each Lutron area's lights go in, for the Blueprint lighting export.
+ * Which Savant Blueprint zones each Lutron area's lights go in, for the Blueprint lighting
+ * export. A light can be in more than one zone.
  *
  * Lutron areas nest (Main Floor › Primary Suite › Bath) and their names repeat: every suite
- * can have a "Bath". Savant rooms are one flat list. Each Lutron area that has lights gets a
- * suggested Savant room, the strongest reason first:
+ * can have a "Bath". Savant zones are one flat list. Each Lutron area that has lights gets a
+ * suggested Savant zone, the strongest reason first:
  *
  *   exact     the same name, ignoring case and punctuation       Living Room → Living Room
  *   words     the same words, ignoring "room" and the like,       Living Room → Living
@@ -13,9 +14,14 @@
  *   spelling  nearly the same spelling                           Kitchn → Kitchen
  *   shared    a word in common: never applied by itself          Primary Suite ~ Master Bath
  *
- * A suggestion only applies by itself when it is clearly the best one and the area's name
- * is unique. Areas that share a name, close calls, weak matches, and earlier choices that
- * no longer fit Savant's rooms wait for the user ("review"). What the user picks always wins.
+ * A suggestion goes in its zone by itself ("auto") only when it is clearly the best and the
+ * area's name is unique. Areas that share a name, close calls and weak matches wait for a
+ * person ("review").
+ *
+ * What a person changes is kept per Savant zone, on top of the automatic matches:
+ *   overrides[zone] = { addAreas: [areaId], removeAreas: [areaId], addLights: [lightId] }
+ * so new automatic matches still arrive in a zone that was edited. Areas a person chose to
+ * leave out on purpose (exported under their Lutron names) are listed in `kept`.
  */
 
 const STOP_WORDS = new Set(['room', 'rooms', 'rm', 'the', 'area', 'zone', 'lights', 'lighting', 'and', 'of', 'a']);
@@ -87,23 +93,23 @@ function editDistance(a, b) {
 
 const similarity = (a, b) => (a && b ? 1 - editDistance(a, b) / Math.max(a.length, b.length) : 0);
 
-/** How well a Savant room fits a Lutron area: { score 0–1, how }. */
-function compare(area, room) {
-  if (area.norm === room.norm) return { score: 1, how: 'exact' };
+/** How well a Savant zone fits a Lutron area: { score 0–1, how }. */
+function compare(area, zone) {
+  if (area.norm === zone.norm) return { score: 1, how: 'exact' };
   const aw = area.words;
-  const rw = room.words;
-  if (sameSet(aw, rw)) return { score: 0.95, how: 'words' };
-  // The name plus its place in Lutron: every word of the Savant room is in the area's name
+  const zw = zone.words;
+  if (sameSet(aw, zw)) return { score: 0.95, how: 'words' };
+  // The name plus its place in Lutron: every word of the Savant zone is in the area's name
   // or one of its parents', and the area's own words are all among them.
-  if (rw.length > aw.length && aw.every((w) => rw.includes(w)) && rw.every((w) => area.pathWords.has(w))) {
+  if (zw.length > aw.length && aw.every((w) => zw.includes(w)) && zw.every((w) => area.pathWords.has(w))) {
     return { score: 0.9, how: 'path' };
   }
-  const shared = rw.filter((w) => aw.includes(w)).length;
-  if (shared === rw.length) return { score: 0.8 + 0.1 * (rw.length / aw.length), how: 'part' }; // Kitchen ⊂ Kitchen Island
-  if (shared === aw.length) return { score: 0.75 + 0.1 * (aw.length / rw.length), how: 'part' }; // Guest ⊂ Guest Bedroom
-  if (shared) return { score: 0.7 * ((2 * shared) / (aw.length + rw.length)), how: 'shared' }; // Primary Suite ~ Master Bath
+  const shared = zw.filter((w) => aw.includes(w)).length;
+  if (shared === zw.length) return { score: 0.8 + 0.1 * (zw.length / aw.length), how: 'part' }; // Kitchen ⊂ Kitchen Island
+  if (shared === aw.length) return { score: 0.75 + 0.1 * (aw.length / zw.length), how: 'part' }; // Guest ⊂ Guest Bedroom
+  if (shared) return { score: 0.7 * ((2 * shared) / (aw.length + zw.length)), how: 'shared' }; // Primary Suite ~ Master Bath
   // Spelling only when no word is shared, so "Bedroom 1" never passes for "Bedroom 2".
-  const alike = similarity(aw.join(' '), rw.join(' '));
+  const alike = similarity(aw.join(' '), zw.join(' '));
   if (alike >= 0.85) return { score: Math.min(alike, 0.9), how: 'spelling' }; // Kitchn → Kitchen
   if (alike >= 0.8) return { score: 0.75 * alike, how: 'spelling' };
   return { score: 0, how: null };
@@ -112,15 +118,10 @@ function compare(area, room) {
 const round = (n) => Math.round(n * 100) / 100;
 
 /**
- * @param areas         Lutron areas: { id, name, parentId }
- * @param zones         the Lutron loads being exported: { id, name, areaId }
- * @param savantRooms   Savant's room names
- * @param decisions     the user's choices: { [areaId]: { zone } }; zone null keeps the Lutron name
- * @returns { rooms, counts }: rooms[i] = { areaId, name, path, loads, zone, status, how,
- *          suggestion, alternatives, reason }. zone is what the export uses (null: the
- *          Lutron name). status: exact | close | set | review | none.
+ * The automatic side: every Lutron area with lights, where it sits, and its best Savant
+ * zones. status: auto (goes in its suggestion by itself) | review | none.
  */
-function mapRooms({ areas, zones, savantRooms = [], decisions = {} }) {
+function suggest({ areas, lights, savantZones }) {
   const byId = new Map(areas.map((a) => [a.id, a]));
 
   // One area holding all the others is the project itself: it says nothing about rooms.
@@ -141,14 +142,14 @@ function mapRooms({ areas, zones, savantRooms = [], decisions = {} }) {
     return path;
   };
 
-  const loads = new Map();
-  for (const z of zones) {
-    if (z.areaId == null) continue;
-    if (!loads.has(z.areaId)) loads.set(z.areaId, []);
-    loads.get(z.areaId).push(z.name);
+  const lightsOf = new Map();
+  for (const l of lights) {
+    if (l.areaId == null || !byId.has(l.areaId)) continue;
+    if (!lightsOf.has(l.areaId)) lightsOf.set(l.areaId, []);
+    lightsOf.get(l.areaId).push({ id: l.id, name: l.name });
   }
 
-  const entries = [...loads.keys()].filter((id) => byId.has(id)).map((id) => {
+  const entries = [...lightsOf.keys()].map((id) => {
     const area = byId.get(id);
     const path = pathOf(area);
     const own = words(area.name);
@@ -161,17 +162,15 @@ function mapRooms({ areas, zones, savantRooms = [], decisions = {} }) {
       pathWords: new Set([...own, ...path.flatMap(words)]),
     };
   });
-
   const nameCount = new Map();
   for (const e of entries) nameCount.set(e.key, (nameCount.get(e.key) || 0) + 1);
 
-  const rooms = savantRooms.map((name) => ({ name, norm: normalize(name), words: words(name) }));
-  const roomNames = new Set(savantRooms);
+  const zones = savantZones.map((name) => ({ name, norm: normalize(name), words: words(name) }));
 
   const result = entries.map((e) => {
-    const candidates = rooms
-      .map((r) => ({ room: r.name, ...compare(e, r) }))
-      .filter((c) => c.score >= 0.3) // weak ones still help the review: one click instead of a search
+    const candidates = zones
+      .map((z) => ({ zone: z.name, ...compare(e, z) }))
+      .filter((c) => c.score >= 0.3) // weak ones still help a review: one click instead of a search
       .sort((a, b) => b.score - a.score)
       .map((c) => ({ ...c, score: round(c.score) }));
     const [best, second] = candidates;
@@ -180,50 +179,128 @@ function mapRooms({ areas, zones, savantRooms = [], decisions = {} }) {
       areaId: e.area.id,
       name: e.area.name,
       path: e.path,
-      loads: loads.get(e.area.id),
-      zone: null,
+      lights: lightsOf.get(e.area.id),
       status: 'none',
-      how: null,
+      how: best?.how || null,
       suggestion: best || null,
-      alternatives: candidates.slice(best ? 1 : 0, 4),
+      alternatives: candidates.slice(1, 4),
       reason: null,
     };
-    const decision = decisions[e.area.id] ?? decisions[String(e.area.id)];
-
-    if (decision) {
-      if (decision.zone === null || roomNames.has(decision.zone)) {
-        return { ...out, zone: decision.zone, status: 'set' };
-      }
-      return { ...out, status: 'review', reason: `"${decision.zone}" isn't one of Savant's rooms any more.` };
-    }
-    if (!rooms.length) return { ...out, reason: 'No Savant rooms yet.' };
-    if (!best) return { ...out, reason: `No Savant room looks like "${e.area.name}".` };
+    if (!zones.length) return { ...out, reason: 'No Savant zones yet.' };
+    if (!best) return { ...out, reason: `No Savant zone looks like "${e.area.name}".` };
     if (twins) {
-      return {
-        ...out,
-        status: 'review',
-        how: best.how,
-        reason: `${twins + 1} Lutron areas are called "${e.area.name}". Check that this is the right Savant room for this one.`,
-      };
+      return { ...out, status: 'review', reason: `${twins + 1} Lutron areas are called "${e.area.name}". Check that this is the right Savant zone for this one.` };
     }
-    if (best.score >= 0.95) return { ...out, zone: best.room, status: 'exact', how: best.how };
-    if (best.score >= 0.8 && best.score - (second?.score ?? 0) >= 0.1) {
-      return { ...out, zone: best.room, status: 'close', how: best.how };
-    }
+    if (best.score >= 0.95) return { ...out, status: 'auto' };
+    if (best.score >= 0.8 && best.score - (second?.score ?? 0) >= 0.1) return { ...out, status: 'auto' };
     return {
       ...out,
       status: 'review',
-      how: best.how,
       reason: second && best.score - second.score < 0.1
-        ? `Could be "${best.room}" or "${second.room}".`
-        : `Only a loose match for "${best.room}".`,
+        ? `Could be "${best.zone}" or "${second.zone}".`
+        : `Only a loose match for "${best.zone}".`,
     };
   });
 
-  result.sort((a, b) => [...a.path, a.name].join('\u0000').localeCompare([...b.path, b.name].join('\u0000'), undefined, { numeric: true }));
-  const counts = { total: result.length, exact: 0, close: 0, set: 0, review: 0, none: 0 };
-  for (const r of result) counts[r.status]++;
-  return { rooms: result, counts };
+  const order = (r) => [...r.path, r.name].join('\u0000');
+  return result.sort((a, b) => order(a).localeCompare(order(b), undefined, { numeric: true }));
 }
 
-module.exports = { mapRooms, words, normalize };
+/**
+ * Everything the Rooms tab and the export need.
+ *
+ * @param areas         Lutron areas: { id, name, parentId }
+ * @param lights        the Lutron loads being exported: { id, name, areaId }
+ * @param savantZones   Savant's zone names, in Savant's order
+ * @param overrides     per zone: { addAreas, removeAreas, addLights } (see top)
+ * @param kept          areas left out on purpose
+ * @returns {
+ *   zones:  [{ name, areas: [{ areaId, whole, lightIds, auto }], lights }],   Savant's order
+ *   areas:  [{ areaId, name, path, lights: [{ id, name }], zones: { [zone]: [lightId] },
+ *              placed, kept, status, how, suggestion, alternatives, reason }], tree order
+ *   counts: { zones, areas, placed, waiting, unmatched, kept },
+ *   zonesOf(lightId) → [zone]   for the export
+ * }
+ */
+function buildRooms({ areas, lights, savantZones = [], overrides = {}, kept = [] }) {
+  const suggested = suggest({ areas, lights, savantZones });
+  const byArea = new Map(suggested.map((a) => [a.areaId, a]));
+  const areaOfLight = new Map(suggested.flatMap((a) => a.lights.map((l) => [l.id, a.areaId])));
+  const keptSet = new Set(kept);
+  const autoIn = (zone) => suggested.filter((a) => a.status === 'auto' && a.suggestion.zone === zone).map((a) => a.areaId);
+
+  const zones = savantZones.map((name) => {
+    const o = overrides[name] || {};
+    const auto = autoIn(name);
+    const removed = new Set(o.removeAreas || []);
+    const whole = [...new Set([...auto, ...(o.addAreas || [])])].filter((id) => byArea.has(id) && !removed.has(id));
+    const partly = new Map();
+    for (const id of o.addLights || []) {
+      const areaId = areaOfLight.get(id);
+      if (areaId == null || whole.includes(areaId)) continue;
+      if (!partly.has(areaId)) partly.set(areaId, []);
+      partly.get(areaId).push(id);
+    }
+    const inZone = [
+      ...whole.map((areaId) => ({
+        areaId,
+        whole: true,
+        lightIds: byArea.get(areaId).lights.map((l) => l.id),
+        auto: auto.includes(areaId) && !(o.addAreas || []).includes(areaId),
+      })),
+      ...[...partly].map(([areaId, lightIds]) => ({ areaId, whole: false, lightIds, auto: false })),
+    ];
+    const rank = new Map(suggested.map((a, i) => [a.areaId, i]));
+    inZone.sort((a, b) => rank.get(a.areaId) - rank.get(b.areaId));
+    return { name, areas: inZone, lights: inZone.reduce((n, a) => n + a.lightIds.length, 0) };
+  });
+
+  const placements = new Map(suggested.map((a) => [a.areaId, {}]));
+  const zonesOfLight = new Map();
+  for (const z of zones) {
+    for (const a of z.areas) {
+      placements.get(a.areaId)[z.name] = a.lightIds;
+      for (const id of a.lightIds) {
+        if (!zonesOfLight.has(id)) zonesOfLight.set(id, []);
+        zonesOfLight.get(id).push(z.name);
+      }
+    }
+  }
+
+  const listed = suggested.map((a) => {
+    const zonesIn = placements.get(a.areaId);
+    const placed = Object.keys(zonesIn).length > 0;
+    let { reason } = a;
+    if (!placed && a.status === 'auto') reason = `Taken out of "${a.suggestion.zone}".`;
+    if (!placed && keptSet.has(a.areaId)) reason = 'Left out on purpose: exported under its Lutron name.';
+    return { ...a, zones: zonesIn, placed, kept: !placed && keptSet.has(a.areaId), reason: placed ? null : reason };
+  });
+
+  const counts = { zones: savantZones.length, areas: listed.length, placed: 0, waiting: 0, unmatched: 0, kept: 0 };
+  for (const a of listed) {
+    if (a.placed) counts.placed++;
+    else if (a.kept) counts.kept++;
+    else if (a.status === 'review') counts.waiting++;
+    else if (a.status === 'none') counts.unmatched++;
+  }
+
+  return { zones, areas: listed, counts, zonesOf: (lightId) => zonesOfLight.get(lightId) || [] };
+}
+
+/**
+ * A person's selection for one zone ({ areas: whole areas, lights: single lights }) as the
+ * difference from the automatic matches, which is what gets stored.
+ */
+function overrideFor(zone, { areas = [], lights = [] }, current) {
+  const auto = current.areas.filter((a) => a.status === 'auto' && a.suggestion.zone === zone).map((a) => a.areaId);
+  const known = new Set(current.areas.map((a) => a.areaId));
+  const chosen = new Set(areas.filter((id) => known.has(id)));
+  const areaOfLight = new Map(current.areas.flatMap((a) => a.lights.map((l) => [l.id, a.areaId])));
+  return {
+    addAreas: [...chosen].filter((id) => !auto.includes(id)),
+    removeAreas: auto.filter((id) => !chosen.has(id)),
+    addLights: [...new Set(lights)].filter((id) => areaOfLight.has(id) && !chosen.has(areaOfLight.get(id))),
+  };
+}
+
+module.exports = { buildRooms, overrideFor, words, normalize };

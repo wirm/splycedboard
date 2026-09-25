@@ -59,8 +59,7 @@
       updateStatus(status.connected, status.ready);
       if (status.ready) loadInventory();
 
-      const cfg = await api('GET', '/config');
-      if (cfg.componentName) $('componentNameInput').value = cfg.componentName;
+      showComponentName(await api('GET', '/config'));
     } catch {
       updateStatus(false, false);
     }
@@ -182,8 +181,21 @@
     }
   }
 
+  // The name the export uses: typed here, else the one Blueprint gave the LEAP Bridge
+  // component in the configuration Savant runs (cfg.controller, from the server).
+  function showComponentName(cfg) {
+    const { controller } = cfg;
+    $('componentNameInput').value = cfg.componentName || (controller.source === 'blueprint' ? controller.name : '');
+    $('componentNameHint').textContent = controller.source === 'blueprint'
+      ? '✓ Filled in from the configuration Savant is running on this host.'
+      : controller.source === 'typed'
+        ? (controller.found && controller.found !== controller.name ? `Blueprint's configuration calls it "${controller.found}". Clear the name to use that.` : '')
+        : `Not found in a Savant configuration on this host, so the export uses "${controller.name}".`;
+  }
+
   async function saveComponentName() {
     await post('/config', { componentName: $('componentNameInput').value.trim() });
+    showComponentName(await api('GET', '/config'));
     const saved = $('componentNameSaved');
     saved.style.display = 'inline';
     setTimeout(() => { saved.style.display = 'none'; }, 2000);
@@ -214,23 +226,23 @@
     loadInventory();
   }
 
-  // The lighting table for Blueprint. Areas still waiting for a Savant room would go out
+  // The lighting table for Blueprint. Areas still waiting for a Savant zone would go out
   // under their Lutron names, so say so first.
   async function exportLighting() {
     let counts = null;
     try {
       counts = (await api('GET', '/rooms')).counts;
     } catch { /* the export itself reports what's wrong */ }
-    const n = counts?.review || 0;
+    const n = counts?.waiting || 0;
     if (n) {
       const them = n === 1 ? 'it' : 'them';
-      if (confirm(`${n} Lutron area${n === 1 ? ' still needs' : 's still need'} a Savant room. Review ${them} first?`)) {
+      if (confirm(`${n} Lutron area${n === 1 ? ' still needs' : 's still need'} a Savant zone. Review ${them} first?`)) {
         showTab('rooms');
         await loadRooms();
         reviewRooms();
         return;
       }
-      if (!confirm(`Export anyway? ${n === 1 ? 'That area keeps its Lutron name' : 'Those areas keep their Lutron names'} as the Savant room.`)) return;
+      if (!confirm(`Export anyway? ${n === 1 ? 'That area keeps its Lutron name' : 'Those areas keep their Lutron names'} as the Savant zone.`)) return;
     }
     window.location.href = '/api/lutron/export/lighting';
   }
@@ -239,10 +251,11 @@
     ctx.root.querySelector(`.tab-btn[data-tab="${name}"]`)?.click();
   }
 
-  // ── Rooms: Lutron areas → Savant rooms (matched on the server, rooms.js) ──
+  // ── Rooms: Savant Blueprint zones ← Lutron areas (matched on the server, rooms.js) ──
 
-  let rooms = null;   // GET /rooms: { savant: { rooms, source, at }, rooms, counts }
-  let review = null;  // the step-by-step review: { queue: [areaId], index, picks: [room] }
+  let rooms = null;   // GET /rooms: { savant, controller, zones, areas, counts }
+  let picker = null;  // the tree picker: { zone, selected: Map(areaId → Set(lightId)), open: Set(areaId) }
+  let review = null;  // the step-by-step review: { queue: [areaId], index, picks: [zone] }
 
   const HOW = {
     exact: 'same name',
@@ -252,6 +265,9 @@
     spelling: 'similar spelling',
     shared: 'a word in common',
   };
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const areaById = (id) => rooms.areas.find((a) => a.areaId === id);
+  const trail = (a) => [...a.path, a.name].join(' › ');
 
   async function loadRooms() {
     try {
@@ -268,124 +284,272 @@
   }
 
   function renderRooms() {
-    const badge = $('ltRoomsBadge');
-    const reviewBtn = $('ltRoomsReviewBtn');
-    const waiting = rooms?.counts.review || 0;
-    badge.hidden = !waiting;
-    badge.textContent = waiting;
-    reviewBtn.hidden = !waiting;
-    reviewBtn.textContent = `Review ${waiting}`;
+    const waiting = rooms?.counts.waiting || 0;
+    $('ltRoomsBadge').hidden = !waiting;
+    $('ltRoomsBadge').textContent = waiting;
+    $('ltRoomsReviewBtn').hidden = !waiting;
+    $('ltRoomsReviewBtn').textContent = `Review ${waiting}`;
 
     if (!rooms) {
-      $('ltRoomsSavant').textContent = '';
-      $('ltRoomsSummary').textContent = '';
-      $('ltRoomsList').innerHTML = `<div class="empty-state"><div class="empty-icon">🏠</div>
+      $('ltRoomsInfo').textContent = '';
+      $('ltUnplaced').innerHTML = '';
+      $('ltZonesList').innerHTML = `<div class="empty-state"><div class="empty-icon">🏠</div>
         <div class="empty-title">No Rooms</div>
-        <div class="empty-desc">Connect to a Lutron processor to map its areas to Savant rooms</div></div>`;
+        <div class="empty-desc">Connect to a Lutron processor to map its areas to Savant zones</div></div>`;
       return;
     }
 
-    const { savant, counts } = rooms;
-    $('ltRoomsSavant').innerHTML = savant.rooms.length
-      ? `<strong>${savant.rooms.length} Savant rooms</strong>, ${savant.source === 'savant' ? 'read from Savant' : 'typed in'}`
-        + `${savant.at ? ` ${esc(new Date(savant.at).toLocaleString())}` : ''}: `
-        + savant.rooms.map((r) => `<span class="lt-chip">${esc(r)}</span>`).join('')
-      : 'No Savant rooms yet. <strong>Read rooms from Savant</strong> (on the Pro Host, with its configuration '
-        + 'running), or type them in with <strong>Edit room list</strong>.';
+    const { savant, controller, counts } = rooms;
+    const from = { blueprint: 'from the configuration Savant is running', savant: 'from Savant', typed: 'typed in' }[savant.source] || '';
+    const component = {
+      blueprint: `Lutron component in Blueprint: <strong>${esc(controller.name)}</strong>`,
+      typed: `Lutron component in Blueprint: <strong>${esc(controller.name)}</strong> (typed on the Setup tab)`,
+      default: `Lutron component: <strong>${esc(controller.name)}</strong>, since none was found in a Savant configuration on this host. Set it on the Setup tab.`,
+    }[controller.source];
+    const tally = [
+      savant.zones.length ? `${plural(savant.zones.length, 'Savant zone')} ${from}` : null,
+      `${counts.placed} of ${plural(counts.areas, 'Lutron area')} placed`,
+      counts.waiting ? `<span class="lt-warn-text">${counts.waiting} waiting for you</span>` : null,
+    ].filter(Boolean).join(' · ');
+    $('ltRoomsInfo').innerHTML = `<div>${tally}</div><div>${component}</div>`;
 
-    const parts = [];
-    if (counts.exact + counts.close) parts.push(`${counts.exact + counts.close} matched automatically`);
-    if (counts.set) parts.push(`${counts.set} set by you`);
-    if (counts.review) parts.push(`<span class="lt-warn-text">${counts.review} need${counts.review === 1 ? 's' : ''} a look</span>`);
-    if (counts.none) parts.push(`${counts.none} without a match (exported under ${counts.none === 1 ? 'its Lutron name' : 'their Lutron names'})`);
-    $('ltRoomsSummary').innerHTML = parts.join(' · ');
+    $('ltZonesList').innerHTML = savant.zones.length
+      ? rooms.zones.map(zoneCard).join('')
+      : `<div class="lt-zones-empty">No Savant zones yet. <strong>Read zones from Savant</strong> (on the Pro Host,
+          with its configuration uploaded), or type them in with <strong>Edit zone list</strong>.</div>`;
 
-    $('ltRoomsList').innerHTML = rooms.rooms.length
-      ? rooms.rooms.map(roomRow).join('')
-      : '<div class="empty-state"><div class="empty-desc">No Lutron area has lights to export.</div></div>';
+    renderUnplaced();
   }
 
-  function roomRow(r) {
-    const choice = r.status === 'set' ? (r.zone === null ? 'lutron' : `room:${r.zone}`)
-      : r.zone ? `room:${r.zone}`
-        : r.suggestion ? `room:${r.suggestion.room}` : 'lutron';
-    const option = (value, label) => `<option value="${esc(value)}"${value === choice ? ' selected' : ''}>${esc(label)}</option>`;
-    const options = rooms.savant.rooms.map((name) => option(`room:${name}`, name)).join('')
-      + option('lutron', `Lutron name: ${r.name}`)
-      + (r.status === 'set' ? option('auto', `Automatic${r.suggestion ? ` (${r.suggestion.room})` : ''}`) : '');
-    const note = {
-      exact: `✓ Matched: ${HOW[r.how] || ''}`,
-      close: `✓ Matched: ${HOW[r.how] || ''}`,
-      set: '✎ Your choice',
-      review: `⚠ ${esc(r.reason)}`,
-      none: `${esc(r.reason)} Exported under its Lutron name.`,
-    }[r.status];
-    const lights = `${r.loads.length} light${r.loads.length === 1 ? '' : 's'}`;
+  function zoneCard(z, i) {
+    const chips = z.areas.map((za) => {
+      const a = areaById(za.areaId);
+      const count = za.whole ? plural(a.lights.length, 'light') : `${za.lightIds.length} of ${plural(a.lights.length, 'light')}`;
+      const how = za.auto ? `Matched automatically: ${HOW[a.how] || ''}` : 'Chosen by you';
+      return `<span class="lt-chip-lutron${za.auto ? ' is-auto' : ''}" title="${esc(how)}">${esc(trail(a))}<small>${count}</small></span>`;
+    }).join('');
     return `
-      <div class="lt-room is-${r.status}">
-        <div class="lt-room-lutron">
-          <div class="lt-room-name">${esc(r.name)}</div>
-          <div class="lt-room-path" title="${esc(r.loads.join(', '))}">${r.path.length ? `${esc(r.path.join(' › '))} · ` : ''}${lights}</div>
-        </div>
-        <div class="lt-room-arrow" aria-hidden="true">→</div>
-        <div class="lt-room-savant">
-          <div class="lt-room-pick">
-            <select aria-label="Savant room for ${esc(r.name)}" onchange="Lutron.setRoom(${r.areaId}, this.value)">${options}</select>
-            ${r.status === 'review' ? `<button class="btn btn-secondary btn-sm" onclick="Lutron.confirmRoom(${r.areaId}, this)">Use this</button>` : ''}
-          </div>
-          <div class="lt-room-note">${note}</div>
-        </div>
+      <div class="lt-zone">
+        <div class="lt-zone-savant"><span class="lt-zone-name">${esc(z.name)}</span><small>${plural(z.lights, 'light')}</small></div>
+        <button class="lt-zone-lutron" onclick="Lutron.openPicker(${i})" aria-label="Choose the Lutron areas in ${esc(z.name)}">
+          <span class="lt-zone-chips">${chips || '<span class="lt-zone-none">No Lutron areas yet: click to choose</span>'}</span>
+          <span class="lt-zone-edit" aria-hidden="true">✎</span>
+        </button>
       </div>`;
   }
 
-  /** value: "room:<name>", "lutron" (keep the Lutron name) or "auto" (the suggestion again) */
-  async function setRoom(areaId, value) {
-    const body = value === 'auto' ? { automatic: true } : value === 'lutron' ? { zone: null } : { zone: value.slice(5) };
+  // Areas in no Savant zone: what's waiting for a decision, the likeliest zone one click away.
+  function renderUnplaced() {
+    const out = rooms.areas.filter((a) => !a.placed);
+    if (!out.length) {
+      $('ltUnplaced').innerHTML = '';
+      return;
+    }
+    const zoneOptions = rooms.savant.zones.map((z, i) => `<option value="${i}">${esc(z)}</option>`).join('');
+    $('ltUnplaced').innerHTML = `
+      <div class="lt-unplaced-title">Lutron areas in no Savant zone <small>(exported under their Lutron names)</small></div>
+      ${out.map((a) => {
+        const waiting = a.status === 'review' && !a.kept;
+        const suggestion = a.suggestion && !a.kept ? rooms.savant.zones.indexOf(a.suggestion.zone) : -1;
+        return `
+        <div class="lt-unplaced${waiting ? ' is-review' : ''}">
+          <div class="lt-unplaced-area">
+            <div class="lt-room-name">${esc(a.name)}</div>
+            <div class="lt-room-path" title="${esc(a.lights.map((l) => l.name).join(', '))}">${a.path.length ? `${esc(a.path.join(' › '))} · ` : ''}${plural(a.lights.length, 'light')}</div>
+            <div class="lt-room-note">${waiting ? '⚠ ' : ''}${esc(a.reason || '')}</div>
+          </div>
+          <div class="lt-unplaced-actions">
+            ${suggestion >= 0 ? `<button class="btn btn-secondary btn-sm" onclick="Lutron.addToZone(${a.areaId}, ${suggestion})">Add to ${esc(a.suggestion.zone)}</button>` : ''}
+            ${zoneOptions ? `<select aria-label="Savant zone for ${esc(a.name)}" onchange="if (this.value !== '') Lutron.addToZone(${a.areaId}, Number(this.value))">
+              <option value="">Add to…</option>${zoneOptions}</select>` : ''}
+            ${a.kept
+              ? `<button class="btn btn-ghost btn-sm" onclick="Lutron.keepArea(${a.areaId}, false)">Undo</button>`
+              : `<button class="btn btn-ghost btn-sm" onclick="Lutron.keepArea(${a.areaId}, true)" title="Export it under its Lutron name, and stop asking">Leave out</button>`}
+          </div>
+        </div>`;
+      }).join('')}`;
+  }
+
+  /** Puts a whole area in a Savant zone, keeping what's there. */
+  function addToZone(areaId, zoneIndex) {
+    const zone = rooms.zones[zoneIndex];
+    const areas = zone.areas.filter((a) => a.whole).map((a) => a.areaId);
+    const lights = zone.areas.filter((a) => !a.whole && a.areaId !== areaId).flatMap((a) => a.lightIds);
+    return saveZone(zone.name, { areas: [...areas, areaId], lights });
+  }
+
+  async function saveZone(zone, selection) {
     try {
-      setRooms(await api('PUT', `/rooms/${areaId}`, body));
+      setRooms(await api('PUT', '/rooms/zone', { zone, ...selection }));
+      return true;
     } catch (err) {
       ctx.toast(err.message, 'error');
-      renderRooms(); // puts the menu back
+      renderRooms();
+      return false;
     }
   }
 
-  function confirmRoom(areaId, button) {
-    setRoom(areaId, button.parentElement.querySelector('select').value);
+  async function keepArea(areaId, kept) {
+    try {
+      setRooms(await api('PUT', `/rooms/area/${areaId}`, { kept }));
+      return true;
+    } catch (err) {
+      ctx.toast(err.message, 'error');
+      return false;
+    }
   }
 
-  async function readSavantRooms() {
+  // ── The tree picker: one zone's Lutron areas and lights, with everything else in reach ──
+
+  function openPicker(zoneIndex) {
+    const zone = rooms.zones[zoneIndex];
+    picker = {
+      zone: zone.name,
+      selected: new Map(zone.areas.map((a) => [a.areaId, new Set(a.lightIds)])),
+      open: new Set(zone.areas.filter((a) => !a.whole).map((a) => a.areaId)),
+    };
+    $('ltPickerTitle').textContent = zone.name;
+    $('ltPickerSearch').value = '';
+    $('ltPickerModal').classList.add('open');
+    renderPicker();
+    $('ltPickerSearch').focus();
+  }
+
+  function closePicker() {
+    picker = null;
+    $('ltPickerModal').classList.remove('open');
+  }
+
+  function renderPicker() {
+    const q = $('ltPickerSearch').value.trim().toLowerCase();
+    const hit = (s) => s.toLowerCase().includes(q);
+    const rows = [];
+    let shown = [];
+    for (const a of rooms.areas) {
+      const lightHit = q && a.lights.some((l) => hit(l.name));
+      if (q && ![a.name, ...a.path].some(hit) && !lightHit) continue;
+      // Headings for the parts of the hierarchy not shown yet
+      let same = 0;
+      while (same < a.path.length && shown[same] === a.path[same]) same++;
+      for (let d = same; d < a.path.length; d++) rows.push(`<div class="lt-tree-group" style="--depth:${d}">${esc(a.path[d])}</div>`);
+      shown = [...a.path, a.name];
+      rows.push(treeArea(a, a.path.length, lightHit));
+    }
+    $('ltPickerTree').innerHTML = rows.join('') || '<div class="lt-tree-none">Nothing matches.</div>';
+    $('ltPickerTree').querySelectorAll('input[data-some="true"]').forEach((box) => { box.indeterminate = true; });
+
+    const chosen = [...picker.selected.values()].filter((ids) => ids.size);
+    const lights = chosen.reduce((n, ids) => n + ids.size, 0);
+    $('ltPickerCount').textContent = `${plural(chosen.length, 'area')}, ${plural(lights, 'light')}`;
+  }
+
+  function treeArea(a, depth, showLights) {
+    const chosen = picker.selected.get(a.areaId) || new Set();
+    const state = chosen.size === 0 ? 'none' : chosen.size === a.lights.length ? 'all' : 'some';
+    const elsewhere = Object.keys(a.zones).filter((z) => z !== picker.zone);
+    const suggested = a.suggestion?.zone === picker.zone && state === 'none';
+    const open = showLights || picker.open.has(a.areaId);
+    const tags = [
+      ...elsewhere.map((z) => `<span class="lt-tag lt-tag-other">in ${esc(z)}</span>`),
+      suggested ? `<span class="lt-tag lt-tag-suggest">suggested: ${esc(HOW[a.how] || '')}</span>` : '',
+    ].join('');
+    const lights = open ? a.lights.map((l) => {
+      const also = Object.entries(a.zones).filter(([z, ids]) => z !== picker.zone && ids.includes(l.id)).map(([z]) => z);
+      return `
+        <label class="lt-tree-light${chosen.has(l.id) ? ' is-on' : ''}" style="--depth:${depth + 1}">
+          <input type="checkbox" ${chosen.has(l.id) ? 'checked' : ''} onchange="Lutron.pickLight(${a.areaId}, ${l.id}, this.checked)">
+          <span class="lt-tree-name">${esc(l.name)}</span>
+          ${also.map((z) => `<span class="lt-tag lt-tag-other">in ${esc(z)}</span>`).join('')}
+        </label>`;
+    }).join('') : '';
+    return `
+      <div class="lt-tree-area${state !== 'none' ? ' is-on' : ''}" style="--depth:${depth}">
+        <label class="lt-tree-check">
+          <input type="checkbox" ${state === 'all' ? 'checked' : ''} data-some="${state === 'some'}" onchange="Lutron.pickArea(${a.areaId}, this.checked)">
+          <span class="lt-tree-name">${esc(a.name)}</span>
+          <span class="lt-tree-count">${plural(a.lights.length, 'light')}</span>
+        </label>
+        <span class="lt-tree-tags">${tags}</span>
+        <button class="lt-tree-toggle" onclick="Lutron.toggleLights(${a.areaId})" aria-expanded="${open}">${open ? '▾' : '▸'} lights</button>
+      </div>${lights}`;
+  }
+
+  function pickArea(areaId, checked) {
+    if (checked) picker.selected.set(areaId, new Set(areaById(areaId).lights.map((l) => l.id)));
+    else picker.selected.delete(areaId);
+    renderPicker();
+  }
+
+  function pickLight(areaId, lightId, checked) {
+    const ids = picker.selected.get(areaId) || new Set();
+    if (checked) ids.add(lightId);
+    else ids.delete(lightId);
+    if (ids.size) picker.selected.set(areaId, ids);
+    else picker.selected.delete(areaId);
+    renderPicker();
+  }
+
+  function toggleLights(areaId) {
+    if (picker.open.has(areaId)) picker.open.delete(areaId);
+    else picker.open.add(areaId);
+    renderPicker();
+  }
+
+  async function savePicker() {
+    const areas = [];
+    const lights = [];
+    for (const [areaId, ids] of picker.selected) {
+      if (ids.size === areaById(areaId).lights.length) areas.push(areaId);
+      else lights.push(...ids);
+    }
+    if (await saveZone(picker.zone, { areas, lights })) closePicker();
+  }
+
+  async function resetPicker() {
+    try {
+      setRooms(await api('PUT', '/rooms/zone', { zone: picker.zone, automatic: true }));
+      closePicker();
+    } catch (err) {
+      ctx.toast(err.message, 'error');
+    }
+  }
+
+  // ── Savant's zone list ───────────────────────────────────────────────────
+
+  async function readSavantZones() {
     try {
       setRooms(await api('POST', '/rooms/savant/read'));
-      ctx.toast(`Read ${rooms.savant.rooms.length} rooms from Savant`);
+      ctx.toast(`Read ${plural(rooms.savant.zones.length, 'Savant zone')}`);
     } catch (err) {
       ctx.toast(err.message, 'error');
     }
   }
 
-  function editSavantRooms() {
-    $('ltSavantRoomsText').value = (rooms?.savant.rooms || []).join('\n');
-    $('ltSavantRoomsModal').classList.add('open');
-    $('ltSavantRoomsText').focus();
+  function editSavantZones() {
+    $('ltSavantZonesText').value = (rooms?.savant.zones || []).join('\n');
+    $('ltSavantZonesModal').classList.add('open');
+    $('ltSavantZonesText').focus();
   }
 
-  function closeSavantRooms() {
-    $('ltSavantRoomsModal').classList.remove('open');
+  function closeSavantZones() {
+    $('ltSavantZonesModal').classList.remove('open');
   }
 
-  async function saveSavantRooms() {
-    const list = $('ltSavantRoomsText').value.split('\n').map((s) => s.trim()).filter(Boolean);
+  async function saveSavantZones() {
+    const list = $('ltSavantZonesText').value.split('\n').map((s) => s.trim()).filter(Boolean);
     try {
-      setRooms(await api('PUT', '/rooms/savant', { rooms: list }));
-      closeSavantRooms();
+      setRooms(await api('PUT', '/rooms/savant', { zones: list }));
+      closeSavantZones();
     } catch (err) {
       ctx.toast(err.message, 'error');
     }
   }
 
-  // The review: one area at a time, with where it sits and what's in it, so same-named
-  // areas (a "Bath" in every suite) can be told apart.
+  // ── The review: one waiting area at a time, with where it sits and what's in it, so
+  //    same-named areas (a "Bath" in every suite) can be told apart ─────────────────
+
   function reviewRooms() {
-    const queue = (rooms?.rooms || []).filter((r) => r.status === 'review').map((r) => r.areaId);
+    const queue = (rooms?.areas || []).filter((a) => !a.placed && !a.kept && a.status === 'review').map((a) => a.areaId);
     if (!queue.length) return;
     review = { queue, index: 0, picks: [] };
     $('ltReviewModal').classList.add('open');
@@ -398,50 +562,47 @@
   }
 
   function renderReview() {
-    const r = rooms.rooms.find((x) => x.areaId === review.queue[review.index]);
-    if (!r) {
+    const a = areaById(review.queue[review.index]);
+    if (!a || a.placed || a.kept) {
       nextReview();
       return;
     }
     $('ltReviewStep').textContent = `${review.index + 1} of ${review.queue.length}`;
-    const picks = [r.suggestion, ...r.alternatives].filter(Boolean);
-    review.picks = picks.map((p) => p.room);
-    const more = r.loads.length > 8 ? ` · ${r.loads.length - 8} more` : '';
+    const picks = [a.suggestion, ...a.alternatives].filter(Boolean);
+    review.picks = picks.map((p) => p.zone);
+    const lights = a.lights.map((l) => l.name);
+    const more = lights.length > 8 ? ` · ${lights.length - 8} more` : '';
     $('ltReviewContent').innerHTML = `
       <div class="lt-review-area">
-        <div class="lt-review-name">${esc(r.name)}</div>
-        <div class="lt-room-path">${esc([...r.path, r.name].join(' › '))}</div>
-        <div class="lt-review-loads">Lights: ${r.loads.slice(0, 8).map(esc).join(' · ')}${more}</div>
+        <div class="lt-review-name lt-lutron-text">${esc(a.name)}</div>
+        <div class="lt-room-path">${esc(trail(a))}</div>
+        <div class="lt-review-loads">Lights: ${lights.slice(0, 8).map(esc).join(' · ')}${more}</div>
       </div>
-      <div class="alert alert-warn show">${esc(r.reason)}</div>
-      ${picks.length ? `<div class="lt-review-label">Suggested</div>
+      <div class="alert alert-warn show">${esc(a.reason || '')}</div>
+      ${picks.length ? `<div class="lt-review-label">Suggested Savant zones</div>
       <div class="lt-review-picks">${picks.map((p, i) => `
         <button class="btn ${i ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="Lutron.pickReview(${i})">
-          ${esc(p.room)}<span class="lt-pick-how">${esc(HOW[p.how] || '')}</span>
+          ${esc(p.zone)}<span class="lt-pick-how">${esc(HOW[p.how] || '')}</span>
         </button>`).join('')}</div>` : ''}
-      ${rooms.savant.rooms.length ? `<div class="lt-review-label">Or another Savant room</div>
+      ${rooms.savant.zones.length ? `<div class="lt-review-label">Or another Savant zone</div>
       <div class="lt-review-other">
-        <select id="ltReviewOther" aria-label="Another Savant room">${rooms.savant.rooms.map((n) => `<option>${esc(n)}</option>`).join('')}</select>
-        <button class="btn btn-secondary btn-sm" onclick="Lutron.pickReviewOther()">Use this room</button>
+        <select id="ltReviewOther" aria-label="Another Savant zone">${rooms.savant.zones.map((z, i) => `<option value="${i}">${esc(z)}</option>`).join('')}</select>
+        <button class="btn btn-secondary btn-sm" onclick="Lutron.pickReviewOther()">Add to this zone</button>
       </div>` : ''}
       <div class="lt-review-actions">
-        <button class="btn btn-ghost btn-sm" onclick="Lutron.pickReviewLutron()">Keep the Lutron name</button>
+        <button class="btn btn-ghost btn-sm" onclick="Lutron.pickReviewLeaveOut()">Leave it out</button>
         <button class="btn btn-ghost btn-sm" onclick="Lutron.skipReview()">Skip for now</button>
       </div>`;
   }
 
-  async function decideReview(body) {
-    try {
-      setRooms(await api('PUT', `/rooms/${review.queue[review.index]}`, body));
-      nextReview();
-    } catch (err) {
-      ctx.toast(err.message, 'error');
-    }
+  async function reviewDecided(action) {
+    if (await action()) nextReview();
   }
 
-  const pickReview = (i) => decideReview({ zone: review.picks[i] });
-  const pickReviewOther = () => decideReview({ zone: $('ltReviewOther').value });
-  const pickReviewLutron = () => decideReview({ zone: null });
+  const reviewArea = () => review.queue[review.index];
+  const pickReview = (i) => reviewDecided(() => addToZone(reviewArea(), rooms.savant.zones.indexOf(review.picks[i])));
+  const pickReviewOther = () => reviewDecided(() => addToZone(reviewArea(), Number($('ltReviewOther').value)));
+  const pickReviewLeaveOut = () => reviewDecided(() => keepArea(reviewArea(), true));
 
   function skipReview() {
     nextReview();
@@ -453,9 +614,9 @@
       renderReview();
       return;
     }
-    const left = rooms?.counts.review || 0;
+    const left = rooms?.counts.waiting || 0;
     closeReview();
-    ctx.toast(left ? `${left} area${left === 1 ? ' still needs' : 's still need'} a look` : 'Every area has a Savant room');
+    ctx.toast(left ? `${plural(left, 'area')} still waiting` : 'Every Lutron area has a Savant zone');
   }
 
   // ── Loads ────────────────────────────────────────────────────────────────
@@ -1036,8 +1197,9 @@
   window.Lutron = {
     startDiscovery, selectProcessor, selectManual, startPairing, reconnect, saveComponentName,
     refreshInventory, exportLighting, setTypeFilter, clearZoneSearch,
-    setRoom, confirmRoom, readSavantRooms, editSavantRooms, closeSavantRooms, saveSavantRooms,
-    reviewRooms, closeReview, pickReview, pickReviewOther, pickReviewLutron, skipReview,
+    openPicker, closePicker, pickArea, pickLight, toggleLights, savePicker, resetPicker,
+    addToZone, keepArea, readSavantZones, editSavantZones, closeSavantZones, saveSavantZones,
+    reviewRooms, closeReview, pickReview, pickReviewOther, pickReviewLeaveOut, skipReview,
     updateSliderDisplay, setLevel, startAdjust, stopAdjust,
     pressButton, releaseButton, recallScene,
     openColorModal, closeColorModal, setColorMode, cmUpdatePreview, sendSpectrum,
@@ -1051,11 +1213,13 @@
       $('zoneSearch').addEventListener('input', (e) => onZoneSearch(e.target.value));
       $('keypadSearch').addEventListener('input', (e) => renderKeypads(e.target.value));
       ctx.root.querySelector('.tab-btn[data-tab="rooms"]').addEventListener('click', loadRooms);
+      $('ltPickerSearch').addEventListener('input', () => { if (picker) renderPicker(); });
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         closeColorModal();
+        closePicker();
         closeReview();
-        closeSavantRooms();
+        closeSavantZones();
       });
     },
 

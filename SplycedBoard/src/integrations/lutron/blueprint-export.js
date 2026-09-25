@@ -56,7 +56,7 @@ function stateRef(component, zoneId, stateName) {
 /** A load the lighting table covers (shades and thermostats have tables of their own). */
 const isLighting = (zone) => EXPORT_TYPES.has(zone.type);
 
-function lightingRow(zone, index, component, savantRoom) {
+function lightingRow(zone, index, component, savantZones) {
   const meta = rowMeta(zone.type);
   const state = stateRef(component, zone.id, meta.stateName);
   return {
@@ -86,7 +86,8 @@ function lightingRow(zone, index, component, savantRoom) {
     'Logical Component': 'Lighting_controller',
     RoomLightsControl: 'Active',
     'Savant Keypad': '',
-    'Savant Zone': { [savantRoom || zone.areaName]: true },
+    // One light can be in several Savant zones; none chosen: the Lutron area's name.
+    'Savant Zone': Object.fromEntries((savantZones.length ? savantZones : [zone.areaName]).map((z) => [z, true])),
     SavantAppGrouping: meta.group,
     ServiceID: 'SVC_ENV_LIGHTING',
     State1: state,
@@ -108,12 +109,12 @@ function lightingRow(zone, index, component, savantRoom) {
 /**
  * @param zones      iterable of controller zone objects
  * @param component  Blueprint component name
- * @param roomFor    zone → its Savant room (rooms.js), or null to use the Lutron area's name
+ * @param zonesFor   zone → the Savant zones it's in (rooms.js); none: the Lutron area's name
  */
-function buildLightingPlist(zones, component, { roomFor = () => null } = {}) {
+function buildLightingPlist(zones, component, { zonesFor = () => [] } = {}) {
   const rows = Array.from(zones)
     .filter(isLighting)
-    .map((zone, i) => lightingRow(zone, i, component, roomFor(zone)));
+    .map((zone, i) => lightingRow(zone, i, component, zonesFor(zone)));
   return toPlist({ Lighting: rows });
 }
 

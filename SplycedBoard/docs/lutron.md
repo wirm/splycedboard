@@ -79,33 +79,48 @@ configuration.
 integers assigned by the processor, not the addresses from Designer's device list.
 
 The **⬇ Export** button on the Loads and Rooms tabs downloads a ready-made
-`lighting_export.plist` for Blueprint's lighting table. Set **Blueprint Component Name** on
-the Setup tab first, so the rows point at your component.
+`lighting_export.plist` for Blueprint's lighting table. Each row's **Controller** is your
+Lutron component's name in Blueprint, for example "Lighting Controller". SplycedBoard reads it
+from the configuration Savant runs on the host: the component that uses the LEAP Bridge
+profile. The Setup tab shows the name it found. A name typed in **Blueprint Component Name**
+wins; clear it to go back to Blueprint's.
 
-### Rooms: Lutron areas → Savant rooms
+### Rooms: Lutron Areas → Savant Blueprint Zones
 
-Each light in the export goes in a Savant room, so Blueprint doesn't need them assigned by
-hand. The **Rooms** tab decides which.
+Each light in the export goes in a Savant zone, so Blueprint doesn't need them assigned by
+hand. The **Rooms** tab has one row per zone: the **Savant Blueprint Zone** in gold, and the
+**Lutron Areas** in it in blue.
 
-1. **Get Savant's rooms.** **Read rooms from Savant** asks the running configuration on the Pro
-   Host (`sclibridge userzones`). Or type them in with **Edit room list**, spelled as in
+1. **Get Savant's zones.** **Read zones from Savant** reads them from the configuration Savant
+   runs on the Pro Host (`userConfig.rpmConfig`). If that isn't there, it asks
+   `sclibridge userzones`. You can also type them in with **Edit zone list**, spelled as in
    Blueprint, for example before the configuration is on the host.
-2. **Clear matches apply by themselves**, when the area's name is unique:
+2. **Clear matches go in by themselves** when the area's name is unique. Their chips are
+   dashed. A clear match is one of these:
    - the same name;
    - the same words, ignoring "room", abbreviations and Master/Primary/Owner's ("Living Room" →
      Living, "Mstr Bath" → Master Bathroom);
    - one name part of the other ("Kitchen Island" → Kitchen);
    - a one-letter slip ("Kitchn" → Kitchen).
-3. **Everything else waits for you**, with the likeliest room already selected:
+3. **Click a zone's Lutron side to choose what's in it.** A window shows Lutron's whole tree
+   of areas and their lights:
+   - Tick whole areas, or single lights. The search box finds either.
+   - Each area is tagged: **in this zone**, **in *another zone*** (you can still add it
+     here), or **suggested**.
+   - **Automatic** goes back to the clear matches.
+
+   A light can be in several zones, for a pendant that shows in both Kitchen and Dining.
+   Your choices are kept, across reconnects too.
+4. **Areas in no zone are listed underneath**, with **Add to** the likeliest zone, **Add to…**
+   any zone, or **Leave out** to export an area under its Lutron name and stop asking. These
+   areas wait for you:
    - areas that share a name, like a "Bathroom" in every suite;
    - close calls and weak matches;
-   - earlier choices that aren't Savant rooms any more.
+   - areas taken out of a zone.
 
    Lutron's hierarchy picks each suggestion: *Upstairs › Guest Suite › Bathroom* → Guest Bath.
    **Review** walks through them one at a time, showing where each area sits and which lights
    it has.
-4. **Move anything, any time.** The menu on each row picks another Savant room, keeps the
-   Lutron name, or goes back to **Automatic**. Your choices are kept, across reconnects too.
 
 Areas still waiting when you export go out under their Lutron names, and the export asks
 first.

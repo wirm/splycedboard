@@ -1,7 +1,8 @@
 /**
  * Rooms through the API, against the mock processor (Home › Main Floor › Kitchen, Living
- * Room; Home › Upstairs › Primary Suite): reading Savant's rooms through sclibridge, typing
- * them in, moving areas, and the lighting export using the result.
+ * Room; Home › Upstairs › Primary Suite): Savant's zones and the Lutron component's name from
+ * the configuration Savant runs (or sclibridge, or typed in), choosing a zone's areas and
+ * lights, and the lighting export using all of it.
  */
 const h = require('./support/harness');
 const { test, before, after } = require('node:test');
@@ -18,12 +19,22 @@ let hub;
 const SCLIBRIDGE = path.join(h.HOME, 'fake-sclibridge');
 const savantSays = (output) => fs.writeFileSync(SCLIBRIDGE, `#!/bin/sh\nprintf '%s' '${output}'\n`, { mode: 0o755 });
 
+// The configuration Savant runs (userConfig.rpmConfig), as far as zoneConfig.xml goes.
+const CONFIG = path.join(h.HOME, 'userConfig.rpmConfig');
+function savantRuns(zoneConfigXml) {
+  fs.mkdirSync(CONFIG, { recursive: true });
+  if (zoneConfigXml === null) fs.rmSync(path.join(CONFIG, 'zoneConfig.xml'), { force: true });
+  else fs.writeFileSync(path.join(CONFIG, 'zoneConfig.xml'), zoneConfigXml);
+}
+
 before(async () => {
   savantSays('');
   process.env.SPLYCEDBOARD_SCLIBRIDGE = SCLIBRIDGE;
+  process.env.SPLYCEDBOARD_SAVANT_CONFIG = CONFIG;
   mock = await startMockProcessor();
   seedDataDir(h.DATA_DIR, mock.port);
-  h.patchSettings('lutron', { telnetPort: await h.freePort() });
+  // No name typed on the Setup tab (seedDataDir sets one), so the default and Blueprint's show
+  h.patchSettings('lutron', { telnetPort: await h.freePort(), componentName: '' });
   h.setEnabled({ lutron: true, scli: false });
   hub = await h.startHub();
   await h.waitFor(async () => (await hub.get('/api/lutron/status')).json?.ready, { what: 'Lutron ready' });
@@ -34,39 +45,43 @@ after(async () => {
   await mock?.close();
 });
 
-const summary = (view) => view.rooms.map((r) => `${[...r.path, r.name].join(' › ')} → ${r.zone} (${r.status})`);
+/** Each Savant zone and what's in it: whole areas by name, single lights as [area, [lights]]. */
+const zonesOf = (view) => Object.fromEntries(view.zones.map((z) => [z.name, z.areas.map((a) => {
+  const area = view.areas.find((x) => x.areaId === a.areaId);
+  return a.whole ? area.name : [area.name, a.lightIds];
+})]));
 
-/** The exported plist, as Blueprint reads it: light label → its Savant room. */
+/** The exported plist, as Blueprint reads it: light label → [its Savant zones], and the controller. */
 async function exported() {
   const res = await fetch(`${hub.base}/api/lutron/export/lighting`);
   assert.equal(res.status, 200);
   const json = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: await res.text() }).toString());
-  return Object.fromEntries(json.Lighting.map((row) => [row.Label, Object.keys(row['Savant Zone'])]));
+  return {
+    zones: Object.fromEntries(json.Lighting.map((row) => [row.Label, Object.keys(row['Savant Zone'])])),
+    controllers: [...new Set(json.Lighting.map((row) => row.Controller))],
+  };
 }
 
 test('lists the Lutron areas that have lights, with their place in the hierarchy', async () => {
   const { status, json } = await hub.get('/api/lutron/rooms');
   assert.equal(status, 200);
-  assert.deepEqual(json.savant, { rooms: [], source: null, at: null });
-  assert.deepEqual(json.rooms.map((r) => [[...r.path, r.name].join(' › '), r.loads]), [
+  assert.deepEqual(json.savant, { zones: [], source: null, at: null });
+  assert.deepEqual(json.areas.map((a) => [[...a.path, a.name].join(' › '), a.lights.map((l) => l.name)]), [
     ['Main Floor › Kitchen', ['Kitchen Cans', 'Pendants']],
     ['Main Floor › Living Room', ['Cove Ketra', 'Ceiling Fan']],
     ['Upstairs › Primary Suite', ['Vanity Rania']],
   ]);
-  assert.equal(json.counts.none, 3);
+  assert.deepEqual(json.controller, { name: 'LutronLeapBridge', source: 'default', found: null });
 });
 
-test("reads Savant's rooms through sclibridge and matches them", async () => {
+test("reads Savant's zones through sclibridge when there's no configuration file", async () => {
   savantSays('Kitchen\nLiving\nMaster Bedroom\n');
   const { status, json } = await hub.post('/api/lutron/rooms/savant/read');
   assert.equal(status, 200);
-  assert.deepEqual([json.savant.rooms, json.savant.source], [['Kitchen', 'Living', 'Master Bedroom'], 'savant']);
-  assert.deepEqual(summary(json), [
-    'Main Floor › Kitchen → Kitchen (exact)',
-    'Main Floor › Living Room → Living (exact)',
-    'Upstairs › Primary Suite → null (review)', // shares Primary/Master with Master Bedroom: a person decides
-  ]);
-  assert.equal(json.rooms[2].suggestion.room, 'Master Bedroom');
+  assert.deepEqual([json.savant.zones, json.savant.source], [['Kitchen', 'Living', 'Master Bedroom'], 'savant']);
+  assert.deepEqual(zonesOf(json), { Kitchen: ['Kitchen'], Living: ['Living Room'], 'Master Bedroom': [] });
+  const suite = json.areas.find((a) => a.name === 'Primary Suite');
+  assert.deepEqual([suite.status, suite.suggestion.zone], ['review', 'Master Bedroom'], 'shares Primary/Master: a person decides');
 });
 
 test("says so when Savant can't be asked", async () => {
@@ -79,42 +94,97 @@ test("says so when Savant can't be asked", async () => {
   try {
     res = await hub.post('/api/lutron/rooms/savant/read');
     assert.equal(res.status, 404);
-    assert.match(res.json.error, /isn't on this Mac/);
+    assert.match(res.json.error, /can't be read here/);
   } finally {
     process.env.SPLYCEDBOARD_SCLIBRIDGE = SCLIBRIDGE;
   }
-  assert.deepEqual((await hub.get('/api/lutron/rooms')).json.savant.rooms, ['Kitchen', 'Living', 'Master Bedroom'], 'the last good list is kept');
+  assert.deepEqual((await hub.get('/api/lutron/rooms')).json.savant.zones, ['Kitchen', 'Living', 'Master Bedroom'], 'the last good list is kept');
 });
 
-test('typed-in rooms replace the list, cleaned up', async () => {
-  const { json } = await hub.put('/api/lutron/rooms/savant', { rooms: [' Kitchen ', 'Living', 'Primary Suite', 'Kitchen', ''] });
-  assert.deepEqual([json.savant.rooms, json.savant.source], [['Kitchen', 'Living', 'Primary Suite'], 'typed']);
-  assert.equal(json.rooms.find((r) => r.name === 'Primary Suite').status, 'exact');
+test("reads the zones and the Lutron component's name from the configuration Savant runs", async () => {
+  savantRuns(`<?xml version="1.0" encoding="UTF-8"?>
+<zone_config>
+<zone_master manufacturer="Savant" model="Pro Host" zone_master_name="Smith"/>
+<zone name="Kitchen" guid="1" type="user"></zone>
+<zone name="Living" guid="2" type="user"></zone>
+<zone name="Primary Suite &amp; Bath" guid="3" type="user"></zone>
+<zone name="Equipment" guid="4" type="resource"></zone>
+<component_list>
+<component manufacturer="HAI" model="OmniPro II" user_defined_name="HAI Panel" device_class="Lighting_controller"></component>
+<component manufacturer="Lutron" model="LEAP Bridge" user_defined_name="Lighting Controller" device_class="Lighting_controller"></component>
+</component_list>
+</zone_config>`);
+  const { json } = await hub.post('/api/lutron/rooms/savant/read');
+  assert.deepEqual([json.savant.zones, json.savant.source], [['Kitchen', 'Living', 'Primary Suite & Bath'], 'blueprint']);
+  assert.deepEqual(json.controller, { name: 'Lighting Controller', source: 'blueprint', found: 'Lighting Controller' });
+  assert.deepEqual((await hub.get('/api/lutron/config')).json.controller.name, 'Lighting Controller');
+  assert.deepEqual((await exported()).controllers, ['Lighting Controller']);
+
+  // A name typed on the Setup tab wins, and clearing it goes back to Blueprint's
+  await hub.post('/api/lutron/config', { componentName: 'My Lutron' });
+  assert.deepEqual((await hub.get('/api/lutron/config')).json.controller, { name: 'My Lutron', source: 'typed', found: 'Lighting Controller' });
+  assert.deepEqual((await exported()).controllers, ['My Lutron']);
+  await hub.post('/api/lutron/config', { componentName: '' });
+  assert.deepEqual((await exported()).controllers, ['Lighting Controller']);
+  savantRuns(null);
 });
 
-test('an area can be moved to another room, kept under its Lutron name, or put back to automatic', async () => {
-  let { json } = await hub.put('/api/lutron/rooms/1', { zone: 'Living' });
-  assert.deepEqual([json.rooms.find((r) => r.areaId === 1).zone, json.rooms.find((r) => r.areaId === 1).status], ['Living', 'set']);
-  ({ json } = await hub.put('/api/lutron/rooms/1', { automatic: true }));
-  assert.deepEqual([json.rooms.find((r) => r.areaId === 1).zone, json.rooms.find((r) => r.areaId === 1).status], ['Kitchen', 'exact']);
-  ({ json } = await hub.put('/api/lutron/rooms/2', { zone: null }));
-  assert.deepEqual([json.rooms.find((r) => r.areaId === 2).zone, json.rooms.find((r) => r.areaId === 2).status], [null, 'set']);
+test('typed-in zones replace the list, cleaned up', async () => {
+  const { json } = await hub.put('/api/lutron/rooms/savant', { zones: [' Kitchen ', 'Living', 'Primary Suite', 'Kitchen', ''] });
+  assert.deepEqual([json.savant.zones, json.savant.source], [['Kitchen', 'Living', 'Primary Suite'], 'typed']);
+  assert.deepEqual(zonesOf(json), { Kitchen: ['Kitchen'], Living: ['Living Room'], 'Primary Suite': ['Primary Suite'] });
 });
 
-test('the lighting export puts each light in its Savant room', async () => {
-  assert.deepEqual(await exported(), {
+test("a zone's areas and single lights are chosen freely, and a light can be in two zones", async () => {
+  // The living room's lights also in the kitchen, and just the pendants also in the living room
+  let { json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', areas: [1, 2], lights: [] });
+  ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Living', areas: [2], lights: [102] }));
+  assert.deepEqual(zonesOf(json), {
+    Kitchen: ['Kitchen', 'Living Room'],
+    Living: [['Kitchen', [102]], 'Living Room'],
+    'Primary Suite': ['Primary Suite'],
+  });
+  assert.deepEqual(json.areas.find((a) => a.name === 'Living Room').zones, { Kitchen: [202, 203], Living: [202, 203] });
+
+  const { zones } = await exported();
+  assert.deepEqual(zones, {
     'Kitchen Cans': ['Kitchen'],
-    Pendants: ['Kitchen'],
-    'Cove Ketra': ['Living Room'], // kept under its Lutron name on purpose
-    'Ceiling Fan': ['Living Room'],
+    Pendants: ['Kitchen', 'Living'],
+    'Cove Ketra': ['Kitchen', 'Living'],
+    'Ceiling Fan': ['Kitchen', 'Living'],
     'Vanity Rania': ['Primary Suite'],
   });
-  await hub.put('/api/lutron/rooms/2', { automatic: true });
-  assert.deepEqual((await exported())['Cove Ketra'], ['Living']);
+
+  ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', automatic: true }));
+  assert.deepEqual(zonesOf(json).Kitchen, ['Kitchen'], 'back to the automatic match');
+});
+
+test('an area taken out of its zone can be left out on purpose, and putting it back undoes that', async () => {
+  let { json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Primary Suite', areas: [], lights: [] });
+  let suite = json.areas.find((a) => a.name === 'Primary Suite');
+  assert.deepEqual([suite.placed, suite.reason], [false, 'Taken out of "Primary Suite".']);
+
+  ({ json } = await hub.put('/api/lutron/rooms/area/3', { kept: true }));
+  suite = json.areas.find((a) => a.name === 'Primary Suite');
+  assert.deepEqual([suite.kept, json.counts.kept], [true, 1]);
+
+  ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Living', areas: [2, 3], lights: [102] }));
+  suite = json.areas.find((a) => a.name === 'Primary Suite');
+  assert.deepEqual([suite.placed, suite.kept, json.counts.kept], [true, false, 0]);
+});
+
+test('choices saved by 2.2.0 (one room per area) carry over', async () => {
+  h.patchSettings('lutron', { rooms: { savant: ['Kitchen', 'Living', 'Guest Bath'], decisions: { 1: { zone: 'Guest Bath' }, 2: { zone: null } } } });
+  const { json } = await hub.get('/api/lutron/rooms');
+  assert.deepEqual(zonesOf(json), { Kitchen: [], Living: [], 'Guest Bath': ['Kitchen'] });
+  assert.equal(json.areas.find((a) => a.name === 'Living Room').kept, true);
+  assert.equal(h.readJson(path.join(h.DATA_DIR, 'lutron', 'settings.json')).rooms.decisions, undefined, 'converted once');
 });
 
 test('bad requests are refused', async () => {
-  assert.equal((await hub.put('/api/lutron/rooms/999', { zone: 'Kitchen' })).status, 404);
-  assert.equal((await hub.put('/api/lutron/rooms/1', { zone: 5 })).status, 400);
-  assert.equal((await hub.put('/api/lutron/rooms/savant', { rooms: 'Kitchen' })).status, 400);
+  assert.equal((await hub.put('/api/lutron/rooms/zone', { zone: 'Nowhere', areas: [], lights: [] })).status, 404);
+  assert.equal((await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', areas: [1] })).status, 400);
+  assert.equal((await hub.put('/api/lutron/rooms/area/999', { kept: true })).status, 404);
+  assert.equal((await hub.put('/api/lutron/rooms/area/1', { kept: 'yes' })).status, 400);
+  assert.equal((await hub.put('/api/lutron/rooms/savant', { zones: 'Kitchen' })).status, 400);
 });

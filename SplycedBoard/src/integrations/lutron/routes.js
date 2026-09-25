@@ -23,8 +23,8 @@ const express = require('express');
 
 const { discoverProcessors } = require('./discovery');
 const { buildLightingPlist, isLighting } = require('./blueprint-export');
-const { mapRooms } = require('./rooms');
-const { savantRooms } = require('../../core/savant');
+const { buildRooms, overrideFor, normalize } = require('./rooms');
+const { savantZones, runningConfig } = require('../../core/savant');
 const { rgbToHsv, cctLevelToKelvin } = require('./color');
 
 const DEFAULT_COMPONENT_NAME = 'LutronLeapBridge';
@@ -106,8 +106,25 @@ function createRoutes(lutron) {
     res.json(c.getInventory());
   });
 
+  /**
+   * The Lutron component's name in Blueprint, which the lighting export's rows point at:
+   * typed on the Setup tab, else read from the configuration Savant is running (the component
+   * using the LEAP Bridge profile), else the default.
+   */
+  function controllerName() {
+    const typed = lutron.settings.load().componentName;
+    if (typed) return { name: typed, source: 'typed', found: foundController() };
+    const found = foundController();
+    return found ? { name: found, source: 'blueprint', found } : { name: DEFAULT_COMPONENT_NAME, source: 'default', found: null };
+  }
+
+  function foundController() {
+    const leap = (runningConfig()?.components || []).filter((c) => /lutron/i.test(c.manufacturer) && normalize(c.model) === 'leap bridge' && c.name);
+    return leap[0]?.name || null;
+  }
+
   router.get('/config', (req, res) => {
-    res.json({ componentName: lutron.settings.load().componentName || '' });
+    res.json({ componentName: lutron.settings.load().componentName || '', controller: controllerName() });
   });
 
   router.post('/config', handle(async (req) => {
@@ -116,9 +133,12 @@ function createRoutes(lutron) {
     return { ok: true };
   }));
 
-  // ── Rooms: which Savant room each Lutron area's lights go in (rooms.js) ────
-  // settings.rooms = { savant: [names], savantSource: 'savant' | 'typed', savantAt,
-  //                    decisions: { [areaId]: { zone } } }   zone null: keep the Lutron name
+  // ── Rooms: which Savant Blueprint zones each Lutron area's lights go in (rooms.js) ──
+  // settings.rooms = {
+  //   savant: [zone names], savantSource: 'blueprint' | 'savant' | 'typed', savantAt,
+  //   overrides: { [zone]: { addAreas, removeAreas, addLights } },   on top of the automatic matches
+  //   kept: [areaId],                                                 left out on purpose
+  // }
 
   const roomSettings = () => lutron.settings.load().rooms || {};
   const saveRooms = (change) => lutron.settings.update((s) => {
@@ -129,16 +149,53 @@ function createRoutes(lutron) {
     if (!c.ready) throw httpError(503, 'Not connected to the processor');
   };
 
+  const computeRooms = (c) => {
+    const r = roomSettings();
+    return buildRooms({
+      areas: [...c.areas.values()],
+      lights: [...c.zones.values()].filter(isLighting),
+      savantZones: r.savant || [],
+      overrides: r.overrides || {},
+      kept: r.kept || [],
+    });
+  };
+
+  // 2.2.0 kept one Savant room per area (rooms.decisions): fold those into the per-zone model.
+  function migrateDecisions(c) {
+    const { decisions } = roomSettings();
+    if (!decisions) return;
+    const before = computeRooms(c);
+    saveRooms((r) => {
+      r.overrides = r.overrides || {};
+      const kept = new Set(r.kept || []);
+      const edit = (zone) => (r.overrides[zone] = r.overrides[zone] || { addAreas: [], removeAreas: [], addLights: [] });
+      for (const [id, { zone }] of Object.entries(decisions)) {
+        const areaId = Number(id);
+        const area = before.areas.find((a) => a.areaId === areaId);
+        const auto = area?.status === 'auto' ? area.suggestion.zone : null;
+        if (zone && zone !== auto) edit(zone).addAreas.push(areaId);
+        if (auto && zone !== auto) edit(auto).removeAreas.push(areaId);
+        if (zone === null) kept.add(areaId);
+      }
+      r.kept = [...kept];
+      delete r.decisions;
+    });
+  }
+
+  function currentRooms(c) {
+    migrateDecisions(c);
+    return computeRooms(c);
+  }
+
   function roomView(c) {
     const r = roomSettings();
+    const { zones, areas, counts } = currentRooms(c);
     return {
-      savant: { rooms: r.savant || [], source: r.savantSource || null, at: r.savantAt || null },
-      ...mapRooms({
-        areas: [...c.areas.values()],
-        zones: [...c.zones.values()].filter(isLighting),
-        savantRooms: r.savant || [],
-        decisions: r.decisions || {},
-      }),
+      savant: { zones: r.savant || [], source: r.savantSource || null, at: r.savantAt || null },
+      controller: controllerName(),
+      zones,
+      areas,
+      counts,
     };
   }
 
@@ -147,50 +204,75 @@ function createRoutes(lutron) {
     return roomView(c);
   }));
 
-  // Savant's rooms, as its running configuration lists them
+  // Savant's zones, from the configuration it's running (or sclibridge)
   router.post('/rooms/savant/read', withController(async (c) => {
     ready(c);
-    const rooms = await savantRooms();
-    saveRooms((r) => Object.assign(r, { savant: rooms, savantSource: 'savant', savantAt: new Date().toISOString() }));
-    log.info(`Read ${rooms.length} rooms from Savant`);
+    const { zones, source } = await savantZones();
+    saveRooms((r) => Object.assign(r, { savant: zones, savantSource: source, savantAt: new Date().toISOString() }));
+    log.info(`Read ${zones.length} Savant zones from ${source === 'blueprint' ? 'the configuration Savant is running' : 'sclibridge'}`);
     return roomView(c);
   }));
 
   // ...or typed in, e.g. before the configuration is on the host
   router.put('/rooms/savant', withController((c, req) => {
     ready(c);
-    const list = req.body?.rooms;
-    if (!Array.isArray(list)) throw httpError(400, 'rooms (a list of names) required');
-    const rooms = [...new Set(list.map((s) => String(s).trim()).filter(Boolean))];
-    saveRooms((r) => Object.assign(r, { savant: rooms, savantSource: 'typed', savantAt: new Date().toISOString() }));
+    const list = req.body?.zones;
+    if (!Array.isArray(list)) throw httpError(400, 'zones (a list of names) required');
+    const zones = [...new Set(list.map((s) => String(s).trim()).filter(Boolean))];
+    saveRooms((r) => Object.assign(r, { savant: zones, savantSource: 'typed', savantAt: new Date().toISOString() }));
     return roomView(c);
   }));
 
-  // { zone: "Kitchen" } picks a Savant room, { zone: null } keeps the Lutron name, and
-  // { automatic: true } goes back to the suggestion.
-  router.put('/rooms/:areaId', withController((c, req) => {
+  // What's in one Savant zone: { zone, areas: [whole Lutron areas], lights: [single lights] },
+  // or { zone, automatic: true } to go back to the automatic matches. A light can be in
+  // several zones: choosing it here doesn't take it out of the others.
+  router.put('/rooms/zone', withController((c, req) => {
+    ready(c);
+    const { zone, areas, lights, automatic } = req.body || {};
+    if (!(roomSettings().savant || []).includes(zone)) throw httpError(404, `No Savant zone "${zone}"`);
+    if (!automatic && !(Array.isArray(areas) && Array.isArray(lights))) {
+      throw httpError(400, 'areas and lights (lists of ids), or automatic: true, required');
+    }
+    const now = currentRooms(c);
+    saveRooms((r) => {
+      r.overrides = r.overrides || {};
+      if (automatic) {
+        delete r.overrides[zone];
+        return;
+      }
+      const chosen = { areas: areas.map(Number), lights: lights.map(Number) };
+      const o = overrideFor(zone, chosen, now);
+      if (o.addAreas.length || o.removeAreas.length || o.addLights.length) r.overrides[zone] = o;
+      else delete r.overrides[zone];
+      // Whatever is in a zone now isn't "left out" any more.
+      const placed = new Set([...chosen.areas, ...now.areas.filter((a) => a.lights.some((l) => chosen.lights.includes(l.id))).map((a) => a.areaId)]);
+      r.kept = (r.kept || []).filter((id) => !placed.has(id));
+    });
+    return roomView(c);
+  }));
+
+  // Leave an area out on purpose (exported under its Lutron name), or stop leaving it out
+  router.put('/rooms/area/:areaId', withController((c, req) => {
     ready(c);
     const areaId = int(req.params.areaId, 'areaId');
     if (!c.areas.has(areaId)) throw httpError(404, `No Lutron area ${areaId}`);
-    const { zone, automatic } = req.body || {};
-    if (!automatic && zone !== null && typeof zone !== 'string') {
-      throw httpError(400, 'zone (a Savant room, or null for the Lutron name) or automatic: true required');
-    }
+    const { kept } = req.body || {};
+    if (typeof kept !== 'boolean') throw httpError(400, 'kept (true or false) required');
     saveRooms((r) => {
-      r.decisions = r.decisions || {};
-      if (automatic) delete r.decisions[areaId];
-      else r.decisions[areaId] = { zone };
+      const set = new Set(r.kept || []);
+      if (kept) set.add(areaId);
+      else set.delete(areaId);
+      r.kept = [...set];
     });
     return roomView(c);
   }));
 
   router.get('/export/lighting', withController((c, req, res) => {
     if (!c.ready) throw httpError(503, 'Not connected');
-    const component = lutron.settings.load().componentName || DEFAULT_COMPONENT_NAME;
-    const roomOf = new Map(roomView(c).rooms.map((r) => [r.areaId, r.zone]));
+    const rooms = currentRooms(c);
     res.setHeader('Content-Type', 'application/x-plist');
     res.setHeader('Content-Disposition', 'attachment; filename="lighting_export.plist"');
-    res.send(buildLightingPlist(c.zones.values(), component, { roomFor: (zone) => roomOf.get(zone.areaId) || null }));
+    res.send(buildLightingPlist(c.zones.values(), controllerName().name, { zonesFor: (light) => rooms.zonesOf(light.id) }));
   }));
 
   // ── Savant profile: zones, areas, shades ───────────────────────────────────

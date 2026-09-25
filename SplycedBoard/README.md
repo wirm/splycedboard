@@ -136,8 +136,8 @@ install, src/, public/  the app itself
   note appears when Savant runs a different version of an integration's profile than this
   SplycedBoard ships.
 - **One page per integration**: Lutron has discovery, pairing, loads, rooms (which Savant
-  room each Lutron area's lights go in, for the Blueprint lighting export), thermostats,
-  keypads and scenes. Apple TV has pairing, a card per Apple TV, and a remote with an app
+  Blueprint zones each Lutron area's lights go in, for the Blueprint lighting export),
+  thermostats, keypads and scenes. Apple TV has pairing, a card per Apple TV, and a remote with an app
   launcher.
   The SCLI Bridge has status and a command runner.
 - **Logs**: live log view, filterable by integration, level and text, with a download

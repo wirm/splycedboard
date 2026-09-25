@@ -2,7 +2,7 @@
  * Lutron HTTP API — mounted at /api/lutron (and at /api for profiles ≤ v1.11).
  *
  * Savant profile endpoints (GET + query string, called by the Lutron LEAP Bridge profile):
- *   feedback                          → the levels that changed (feedback.js), polled twice a second
+ *   feedback[?start=1]                → the levels and LEDs that changed (feedback.js), polled twice a second
  *   zone/query?id                     → { zone, level }   (QueryDimmerLevel, when Savant starts)
  *   zone/level?id&level[&fade]         zone/raise|lower|stop?id
  *   area/level?id&level[&fade]
@@ -13,7 +13,7 @@
  *   hvac/status?id                     hvac/heat|cool?id&setpoint    hvac/mode|fan?id&mode
  *
  * Dashboard endpoints:
- *   GET  status | inventory | discover | config | export/lighting | debug/leap
+ *   GET  status | inventory | discover | config | export/lighting[?keypads=1] | debug/leap
  *   POST pair | connect | config | debug/leap
  *   POST zone/:id/level|raise|lower|stop|spectrum   area/:id/level   scene/:id/recall
  *   POST button/press|release  { href }
@@ -47,6 +47,33 @@ function num(value, name) {
 }
 
 const clientAddress = (req) => String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+
+/**
+ * Keypad buttons for the lighting export, by area, keypad and position. Each goes in the
+ * Savant zones its Lutron area's lights went in (Rooms tab), or else under the area's name.
+ */
+function exportedKeypadButtons(controller, rooms) {
+  const zonesOfArea = new Map(rooms.areas.map((a) => [a.areaId, Object.keys(a.zones || {})]));
+  const out = [];
+  for (const bg of controller.getInventory().buttonGroups) {
+    if (bg.deviceId == null) continue;
+    const areaId = controller.devices.get(bg.deviceId)?.areaId;
+    for (const b of bg.buttons) {
+      if (b.number == null) continue;
+      const what = b.role === 'raise' ? 'Raise' : b.role === 'lower' ? 'Lower' : (b.engraving || b.name);
+      out.push({
+        keypad: bg.deviceName,
+        label: `${bg.deviceName} ${what}`,
+        deviceId: bg.deviceId,
+        number: b.number,
+        ledId: b.ledId,
+        areaName: bg.areaName,
+        savantZones: zonesOfArea.get(areaId) || [],
+      });
+    }
+  }
+  return out.sort((a, b) => a.areaName.localeCompare(b.areaName) || a.keypad.localeCompare(b.keypad) || a.number - b.number);
+}
 
 function createRoutes(lutron) {
   const router = express.Router();
@@ -269,19 +296,25 @@ function createRoutes(lutron) {
     return roomView(c);
   }));
 
+  // ?keypads=1: every keypad button too, as Keypad Button rows
   router.get('/export/lighting', withController((c, req, res) => {
     if (!c.ready) throw httpError(503, 'Not connected');
     const rooms = currentRooms(c);
+    const keypadButtons = req.query.keypads === '1' ? exportedKeypadButtons(c, rooms) : [];
     res.setHeader('Content-Type', 'application/x-plist');
     res.setHeader('Content-Disposition', 'attachment; filename="lighting_export.plist"');
-    res.send(buildLightingPlist(c.zones.values(), controllerName().name, { zonesFor: (light) => rooms.zonesOf(light.id) }));
+    res.send(buildLightingPlist(c.zones.values(), controllerName().name, {
+      zonesFor: (light) => rooms.zonesOf(light.id),
+      keypadButtons,
+    }));
   }));
 
   // ── Savant profile: zones, areas, shades ───────────────────────────────────
 
   // Polled by the profile twice a second, per Savant host: keep it cheap and quiet. Without a
   // processor there's simply nothing new ({}), rather than an error every half second.
-  router.get('/feedback', (req, res) => res.json(lutron.feedback.poll(clientAddress(req))));
+  // ?start=1: Savant just started (FeedbackStart), send everything again.
+  router.get('/feedback', (req, res) => res.json(lutron.feedback.poll(clientAddress(req), { start: req.query.start === '1' })));
 
   // Asked once per load when Savant starts. The zone comes back too, so the profile knows
   // whose level it is (DimmerLevel_<zone>).

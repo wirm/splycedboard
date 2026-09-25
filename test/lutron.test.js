@@ -43,9 +43,21 @@ test('loads the QSX inventory through the per-area fallbacks', async () => {
   assert.equal(inv.zones.find((z) => z.id === 101).areaName, 'Kitchen');
   assert.equal(inv.zones.find((z) => z.id === 101).level, 75);
 
-  assert.equal(inv.buttonGroups.length, 1);
-  assert.equal(inv.buttonGroups[0].deviceId, 501);
-  assert.deepEqual(inv.buttonGroups[0].buttons.map((b) => b.name), ['Welcome', 'Cooking', 'All Off']);
+  // Keypads as QSX lists them: groups under /device/:id with only hrefs, each button read on its own
+  const [entry, bedside] = [501, 502].map((id) => inv.buttonGroups.find((g) => g.deviceId === id));
+  assert.deepEqual([entry.deviceName, entry.areaName, entry.deviceType, entry.model, entry.family.id], ['Entry', 'Kitchen', 'SeeTouchKeypad', 'HQWD-W4S', 'seetouch']);
+  assert.deepEqual(entry.buttons.map((b) => [b.number, b.name, b.role]), [
+    [1, 'Welcome', 'button'], [2, 'Cooking', 'button'], [3, 'Dinner', 'button'], [4, 'Night', 'button'],
+    [6, 'All Off', 'button'], [18, 'Button 18', 'lower'], [19, 'Button 19', 'raise'],
+  ]);
+  assert.deepEqual(entry.buttons.map((b) => [b.ledId, b.ledState]).slice(0, 5), [[801, 'Off'], [802, 'Off'], [803, 'Off'], [804, 'Off'], [806, 'On']], 'LED states from their subscriptions');
+  assert.deepEqual(entry.rows, [
+    { type: 'button', id: 701 }, { type: 'button', id: 702 }, { type: 'button', id: 703 }, { type: 'button', id: 704 },
+    { type: 'gap' }, { type: 'button', id: 706 }, { type: 'pair', lower: 718, raise: 719 },
+  ], 'the 4-scene seeTouch keeps its gap above Off, raise/lower at the bottom');
+  assert.deepEqual([bedside.deviceName, bedside.family.id, bedside.buttons[1].name], ['Bedside', 'palladiom', 'Button 2']);
+  assert.deepEqual(bedside.rows.at(-1), { type: 'pair', lower: 716, raise: 717 });
+  assert.equal(mock.received.filter((r) => r.type === 'SubscribeRequest' && /^\/led\/\d+\/status$/.test(r.url)).length, 8, 'one subscription per LED');
 
   assert.equal(inv.virtualButtons.length, 3);
   assert.equal(inv.thermostats.length, 1);
@@ -79,6 +91,7 @@ test('feedback: Savant gets every level when it starts asking, then changes made
   const first = await poll();
   assert.deepEqual(Object.keys(levelsIn(first)).sort(), ['101', '102', '201', '202', '203', '301'], 'every zone but the thermostat');
   assert.equal(levelsIn(first)[101], 75);
+  assert.ok('k0' in (await poll()), 'then the keypad LEDs');
   assert.deepEqual(await poll(), {});
 
   // A keypad dims the kitchen: the processor tells SplycedBoard, nobody asked for it
@@ -88,6 +101,26 @@ test('feedback: Savant gets every level when it starts asking, then changes made
   assert.deepEqual(levelsIn(next), { 101: 20 });
 
   assert.deepEqual((await hub.get('/api/lutron/status')).json.feedbackFrom, ['127.0.0.1'], 'the dashboard sees Savant asking');
+});
+
+test('feedback: keypad LEDs follow the levels, keyed device_LED, and change when a button is pressed', async () => {
+  const poll = async (query = '') => (await hub.get(`/api/lutron/feedback${query}`)).json;
+  const ledsIn = (answer) => Object.fromEntries(Object.keys(answer).filter((k) => k.startsWith('k')).map((k) => [answer[k], answer[`o${k.slice(1)}`]]));
+
+  // Savant starting: every level, then every LED
+  const levels = await poll('?start=1');
+  assert.ok('z0' in levels);
+  const leds = ledsIn(await poll());
+  assert.deepEqual(leds['501_806'], 1, 'All Off is lit');
+  assert.equal(Object.keys(leds).length, 8, 'every LED of both keypads');
+  assert.deepEqual(await poll(), {});
+
+  // Night pressed at the keypad (here: from the dashboard): its LED comes on
+  const night = (await hub.get('/api/lutron/inventory')).json.buttonGroups.find((g) => g.deviceId === 501).buttons.find((b) => b.number === 4);
+  await hub.post('/api/lutron/button/press', { href: night.href });
+  await hub.post('/api/lutron/button/release', { href: night.href });
+  const next = await h.waitFor(async () => { const a = await poll(); return Object.keys(a).length && a; }, { what: 'LED feedback' });
+  assert.deepEqual(ledsIn(next), { '501_804': 1 });
 });
 
 test('zone, area, shade and scene endpoints drive the processor', async () => {
@@ -171,6 +204,48 @@ test('lighting export is a plist with every light', async () => {
   for (const name of ['Kitchen Cans', 'Pendants', 'Cove Ketra', 'Ceiling Fan', 'Vanity Rania']) assert.ok(res.text.includes(name), name);
   assert.ok(!res.text.includes('Window Shades'), 'shades are not lighting rows');
   assert.ok(!res.text.includes('Primary Thermostat'), 'thermostats are not lighting rows');
+});
+
+// Keypad Button rows as Blueprint itself writes them (a row made in Blueprint 11.2.4 with this
+// profile's Keypad Button entity): the same keys, the LED as State1, five child actions.
+const BLUEPRINT_KEYPAD_ROW_KEYS = ['Address1', 'Address2', 'Address3', 'Address4', 'Address5', 'Address6', 'BLEGroupId', 'BLENetworkKey', 'BLENodeId', 'Button Label', 'Command', 'Command Type', 'Controller', 'Controller Zone', 'DelayTime', 'DimmerLevel', 'Enabled', 'Entity', 'FadeTime', 'Identifier', 'IsSceneable', 'Label', 'LightsAreOn', 'Logical Component', 'RoomLightsControl', 'Savant Keypad', 'Savant Zone', 'SavantAppGrouping', 'ServiceID', 'State1', 'State2', 'Technology', 'Toggle Label', 'Type', 'UI Type', 'UITypeChild', 'UMF', 'WholeHouseLightsControl', 'hasCompiled', 'maxKelvinTemp', 'minKelvinTemp', 'sendReleaseAfterHold', 'shouldDefaultRow'];
+const BLUEPRINT_KEYPAD_CHILD_KEYS = ['Address1', 'Address2', 'Address3', 'Address4', 'Address5', 'Address6', 'Button Label', 'Command', 'Command Type', 'Controller', 'Controller Zone', 'Enabled', 'Entity', 'Identifier', 'Label', 'LightsAreOn', 'Savant Keypad', 'Savant Zone', 'Technology', 'Type', 'UI Type', 'shouldDefaultRow'];
+
+test('lighting export: keypad buttons only when asked, as Blueprint writes Keypad Button rows', async () => {
+  const exported = async (query = '') => {
+    const res = await fetch(`${hub.base}/api/lutron/export/lighting${query}`);
+    return JSON.parse(require('child_process').execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: await res.text() }).toString()).Lighting;
+  };
+  assert.equal((await exported()).filter((r) => r.Entity === 'Keypad Button').length, 0, 'not unless asked');
+
+  const rows = await exported('?keypads=1');
+  const lights = rows.filter((r) => r.Entity !== 'Keypad Button');
+  const keys = rows.filter((r) => r.Entity === 'Keypad Button');
+  assert.equal(keys.length, 12, 'every button of both keypads, raise and lower too');
+  assert.deepEqual(rows.map((r) => r.Identifier), rows.map((_, i) => String(i)), 'numbered on from the lights');
+  assert.ok(lights.length && rows.indexOf(keys[0]) === lights.length, 'after the lights');
+
+  const welcome = keys.find((r) => r.Label === 'Entry Welcome');
+  assert.deepEqual(Object.keys(welcome).sort(), BLUEPRINT_KEYPAD_ROW_KEYS);
+  assert.deepEqual([welcome.Address1, welcome.Address2, welcome.Address3], ['501', '1', '801']);
+  assert.deepEqual([welcome.Command, welcome['Command Type'], welcome['UI Type'], welcome.SavantAppGrouping], ['ButtonPress', 'Push Command', 'Toggle', 'Scene']);
+  const component = welcome.Controller;
+  assert.equal(welcome.State1.RPMStateName, `${component}.Lighting_controller.IsCurrentLEDOn_501_801`, 'lit by profile 1.15\'s LED feedback');
+  assert.deepEqual(welcome.State1.identifiers.map((i) => [i.name, i.value]), [['DeviceID', '501'], ['LEDNumber', '801']]);
+  assert.deepEqual(welcome.State2, {});
+  assert.deepEqual(welcome.UITypeChild.map((c) => [c.Command, c['Command Type']]), [
+    ['ButtonPress', 'Toggle Command'], ['ButtonRelease', 'Release Command'], ['ButtonRelease', 'Toggle Release Command'],
+    ['ButtonPressAndRelease', 'OSD Push Command'], ['ButtonPressAndRelease', 'OSD Hold Command'],
+  ]);
+  assert.deepEqual(Object.keys(welcome.UITypeChild[0]).sort(), BLUEPRINT_KEYPAD_CHILD_KEYS);
+
+  // In faceplate order; raise and lower have no LED
+  assert.deepEqual(keys.filter((r) => r.Address1 === '501').map((r) => r.Label), [
+    'Entry Welcome', 'Entry Cooking', 'Entry Dinner', 'Entry Night', 'Entry All Off', 'Entry Lower', 'Entry Raise',
+  ]);
+  const raise = keys.find((r) => r.Label === 'Entry Raise');
+  assert.deepEqual([raise.Address2, raise.Address3, raise.State1.RPMStateName.endsWith('IsCurrentLEDOn_501_0')], ['19', '', true]);
+  assert.deepEqual(Object.keys(keys.find((r) => r.Label === 'Bedside Bright')['Savant Zone']), ['Primary Suite'], 'under its Lutron area until mapped');
 });
 
 test('telnet bridge: initial state, commands, queries and LED feedback', async () => {

@@ -11,7 +11,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { manifests } = require('../SplycedBoard/src/integrations');
 const { compareVersions } = require('../SplycedBoard/src/core/profiles');
-const { SLOTS } = require('../SplycedBoard/src/integrations/lutron/feedback');
+const { SLOTS, LED_SLOTS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
 const ROOT = path.join(__dirname, '..');
 const PROFILES = path.join(ROOT, 'SplycedBoard', 'profiles');
@@ -148,7 +148,7 @@ test('update_state_variable only reads and writes declared variables', () => {
 // SplycedBoard answers the Lutron profile's PollFeedback in SLOTS slots (lutron/feedback.js),
 // and the profile's ZoneFeedback status message writes each into two states: a slot one side
 // has and the other doesn't would lose levels, or write old ones.
-test('the Lutron profile reads every feedback slot SplycedBoard sends', () => {
+test('the Lutron profile reads every feedback slot SplycedBoard sends, levels and LEDs', () => {
   const xml = fs.readFileSync(path.join(PROFILES, 'lutron_leap bridge.xml'), 'utf8');
   const message = xml.match(/<status_message name="ZoneFeedback">([\s\S]*?)<\/status_message>/)?.[1];
   assert.ok(message, 'no ZoneFeedback status message');
@@ -162,6 +162,17 @@ test('the Lutron profile reads every feedback slot SplycedBoard sends', () => {
     assert.ok(writes.every((m) => m[1] === m[2]), `${state}: each slot's zone gets its own level`);
   }
   assert.match(xml, /<action name="PollFeedback">[\s\S]*?>api\/lutron\/feedback</, 'PollFeedback asks the wrong path');
+
+  // Keypad LEDs: "<device>_<LED>" into IsCurrentLEDOn_*
+  const leds = xml.match(/<status_message name="LEDFeedback">([\s\S]*?)<\/status_message>/)?.[1];
+  assert.ok(leds, 'no LEDFeedback status message');
+  const allLeds = Array.from({ length: LED_SLOTS }, (_, i) => i);
+  assert.deepEqual([...leds.matchAll(/<values path="\/none\/k(\d+)"/g)].map((m) => Number(m[1])), allLeds, 'LED key slots');
+  assert.deepEqual([...leds.matchAll(/<values path="\/none\/o(\d+)"/g)].map((m) => Number(m[1])), allLeds, 'LED state slots');
+  const lights = [...leds.matchAll(/<update_state_variable name="IsCurrentLEDOn_\*"[^>]*wildcard_source_name="FeedbackLEDKey(\d+)">FeedbackLEDOn(\d+)</g)];
+  assert.deepEqual(lights.map((m) => Number(m[1])), allLeds);
+  assert.ok(lights.every((m) => m[1] === m[2]), "each LED slot's key gets its own state");
+  assert.match(xml, /<action name="FeedbackStart">[\s\S]*?feedback<\/command_string>[\s\S]*?\?start=1[\s\S]*?period_ms="0"/, 'FeedbackStart asks for everything when Savant starts');
 });
 
 // Blueprint's own schema, where Blueprint is installed (not on CI). Savant passes over what it

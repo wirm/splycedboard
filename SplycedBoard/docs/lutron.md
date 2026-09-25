@@ -93,9 +93,10 @@ app, by a scene, or on SplycedBoard's dashboard. This needs profile 1.13 or late
   asking. "not polling" means Savant is still running an older profile: update the
   component to 1.13 or later and upload the configuration.
 - **What's covered.** Dimmer, Switch, Variable Shade and Shade rows, and the brightness of
-  Color Slider rows.
-- **Not yet covered.** Keypad LEDs, and the color or color temperature of Ketra and Rania
-  loads (DMX and CCT Slider rows).
+  Color Slider rows. From profile 1.15, keypad LEDs too: a Keypad Button row lights up with
+  its button's LED (`IsCurrentLEDOn_<device>_<LED>`).
+- **Not yet covered.** The color or color temperature of Ketra and Rania loads (DMX and CCT
+  Slider rows).
 
 ### Lighting data table
 
@@ -108,6 +109,16 @@ Lutron component's name in Blueprint, for example "Lighting Controller". Splyced
 from the configuration Savant runs on the host: the component that uses the LEAP Bridge
 profile. The Setup tab shows the name it found. A name typed in **Blueprint Component Name**
 wins; clear it to go back to Blueprint's.
+
+The export asks whether to **include keypad buttons**, and remembers your answer in the
+browser. If you include them, every keypad button becomes a **Keypad Button** row, laid out
+the way Blueprint writes one:
+- **Addresses:** Address1 is the device, Address2 the button number, Address3 the LED.
+- **Actions:** press and release.
+- **State:** the button's LED.
+
+Rows are labeled with the keypad's name ("Entry Welcome") and go in the Savant zones that
+keypad's Lutron area went in on the Rooms tab. Raise and lower come too; they have no LED.
 
 ### Rooms: Lutron Areas → Savant Blueprint Zones
 
@@ -163,9 +174,26 @@ Keypads and scenes:
 | Data table column | Keypad button | Scene |
 |---|---|---|
 | Entity | `Keypad Button` | `Button Press And Release` |
-| Address1 | Device ID (Keypads tab) | Virtual button ID (Scenes tab) |
+| Address1 | Device ID | Virtual button ID (Scenes tab) |
 | Address2 | Button number | — |
-| Address3 | LED ID (usually the button number) | — |
+| Address3 | LED ID | — |
+
+Each keypad on the **Keypads** tab lists these under **Savant addresses**. Or let the export
+write the rows (above).
+
+### Keypads tab
+
+Each keypad is drawn with its model's structure, from the processor's device type and model
+number:
+- **seeTouch:** buttons in their seven positions, so a 4-scene keypad keeps its gap above Off.
+- **Palladiom:** flat keys meeting at seams.
+- **Sunnata:** broad keys with a split raise/lower rocker.
+- **Alisse:** LED bars and round raise/lower buttons.
+- **Pico:** on, raise, favorite, lower, off.
+- **Anything else:** a plain column.
+
+Press a key to press the button, and hold raise or lower to ramp. The LEDs follow the
+processor live, one subscription per LED; QSX has no subscription for all of them at once.
 
 ### Shade data table
 

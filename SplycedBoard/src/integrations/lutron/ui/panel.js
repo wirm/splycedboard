@@ -234,23 +234,52 @@
 
   // The lighting table for Blueprint. Areas still waiting for a Savant zone would go out
   // under their Lutron names, so say so first.
+  // Export: what goes in, keypad buttons optional (remembered in this browser), and a
+  // warning while Lutron areas still wait for a Savant zone.
+  const EXPORT_TYPES = new Set(['dimmer', 'switch', 'fan', 'ketra', 'rania']);
+  const EXPORT_KEYPADS = 'splycedboard.lutron.exportKeypads';
+
   async function exportLighting() {
     let counts = null;
     try {
       counts = (await api('GET', '/rooms')).counts;
     } catch { /* the export itself reports what's wrong */ }
     const n = counts?.waiting || 0;
-    if (n) {
-      const them = n === 1 ? 'it' : 'them';
-      if (confirm(`${n} Lutron area${n === 1 ? ' still needs' : 's still need'} a Savant zone. Review ${them} first?`)) {
-        showTab('rooms');
-        await loadRooms();
-        reviewRooms();
-        return;
-      }
-      if (!confirm(`Export anyway? ${n === 1 ? 'That area keeps its Lutron name' : 'Those areas keep their Lutron names'} as the Savant zone.`)) return;
-    }
-    window.location.href = '/api/lutron/export/lighting';
+    $('ltExportWaiting').hidden = !n;
+    $('ltExportWaitingText').textContent = n
+      ? `${n} Lutron area${n === 1 ? ' still needs' : 's still need'} a Savant zone. ${n === 1 ? 'It keeps its Lutron name' : 'They keep their Lutron names'} as the zone unless you review ${n === 1 ? 'it' : 'them'}.`
+      : '';
+    const lights = inventory ? inventory.zones.filter((z) => EXPORT_TYPES.has(z.type)).length : 0;
+    const keypads = inventory ? inventory.buttonGroups.filter((g) => g.deviceId != null) : [];
+    const buttons = keypads.reduce((sum, g) => sum + g.buttons.filter((b) => b.number != null).length, 0);
+    $('ltExportLights').textContent = `${plural(lights, 'light')}, each in its Savant zones from the Rooms tab.`;
+    $('ltExportKeypads').textContent = buttons
+      ? `${plural(buttons, 'button')} on ${plural(keypads.length, 'keypad')}, as Keypad Button rows: press, release, and the button's LED as its state.`
+      : 'No keypad buttons found.';
+    const toggle = $('ltExportKeypadsToggle');
+    let remembered = null;
+    try { remembered = localStorage.getItem(EXPORT_KEYPADS); } catch { /* not kept */ }
+    toggle.checked = !!buttons && remembered === '1';
+    toggle.disabled = !buttons;
+    $('ltExportModal').classList.add('open');
+  }
+
+  function closeExport() {
+    $('ltExportModal').classList.remove('open');
+  }
+
+  function downloadExport() {
+    const keypads = $('ltExportKeypadsToggle').checked;
+    try { localStorage.setItem(EXPORT_KEYPADS, keypads ? '1' : '0'); } catch { /* not kept */ }
+    closeExport();
+    window.location.href = `/api/lutron/export/lighting${keypads ? '?keypads=1' : ''}`;
+  }
+
+  async function reviewBeforeExport() {
+    closeExport();
+    showTab('rooms');
+    await loadRooms();
+    reviewRooms();
   }
 
   function showTab(name) {
@@ -834,8 +863,8 @@
 
   // ── Keypads ──────────────────────────────────────────────────────────────
 
-  const ledId = (href) => (href ? `led-${href.replace(/\//g, '-').replace(/^-/, '')}` : '');
-
+  // Each keypad drawn with its family's structure (lutron/keypads.js): the buttons where they
+  // sit on the faceplate, empty positions, raise/lower pairs, and live LEDs.
   function renderKeypads(filter = '') {
     const container = $('keypadsContent');
     if (!inventory) return;
@@ -843,7 +872,8 @@
     const lc = filter.toLowerCase();
     const areaMap = new Map();
     for (const bg of inventory.buttonGroups) {
-      if (filter && !bg.deviceName.toLowerCase().includes(lc) && !bg.areaName.toLowerCase().includes(lc)) continue;
+      const haystack = [bg.deviceName, bg.areaName, bg.family?.name, bg.model, ...bg.buttons.map((b) => b.name)].join(' ').toLowerCase();
+      if (filter && !haystack.includes(lc)) continue;
       const key = bg.areaName || 'Unknown Area';
       if (!areaMap.has(key)) areaMap.set(key, []);
       areaMap.get(key).push(bg);
@@ -861,35 +891,61 @@
           <span class="area-name">${esc(areaName)}</span>
           <span class="area-count">${groups.length}</span>
         </div>
-        <div class="keypad-grid">
-          ${groups.map((bg) => `
-            <div class="keypad-card${bg.buttons.length > 5 ? ' wide' : ''}">
-              <div class="keypad-title">${esc(bg.deviceName)}</div>
-              <div class="zone-id" style="margin-bottom:10px">Device ID: ${bg.deviceId}</div>
-              <div class="button-grid${bg.buttons.length > 5 ? ' multi-col' : ''}">
-                ${bg.buttons.map((btn) => `
-                  <button class="keypad-btn"
-                    onmousedown="Lutron.pressButton('${esc(btn.href)}')"
-                    onmouseup="Lutron.releaseButton('${esc(btn.href)}')"
-                    onmouseleave="Lutron.releaseButton('${esc(btn.href)}')"
-                    ontouchstart="Lutron.pressButton('${esc(btn.href)}')"
-                    ontouchend="Lutron.releaseButton('${esc(btn.href)}')">
-                    <span class="keypad-btn-label">
-                      <span class="keypad-btn-name">${esc(btn.name || 'Button ' + btn.number)}</span>
-                      <span class="keypad-btn-num">Button ${btn.number ?? btn.id}</span>
-                    </span>
-                    <span class="keypad-btn-led ${ledStates[btn.ledHref] === 'On' ? 'on' : ''}" id="${ledId(btn.ledHref)}"></span>
-                  </button>`).join('')}
-              </div>
-            </div>`).join('')}
-        </div>
+        <div class="kp-grid">${groups.map(keypadCard).join('')}</div>
       </div>`).join('');
+  }
+
+  function keypadCard(bg) {
+    const byId = new Map(bg.buttons.map((b) => [b.id, b]));
+    const family = bg.family || { id: 'generic', name: 'Keypad' };
+    const key = (b, cls = '') => {
+      if (!b) return '<span class="kp-key kp-blank" aria-hidden="true"></span>';
+      const label = b.role === 'raise' ? '▲' : b.role === 'lower' ? '▼' : (b.engraving || b.name || `Button ${b.number}`);
+      const title = `Button ${b.number ?? b.id}${b.role !== 'button' ? ` (${b.role})` : ''}`;
+      return `<button class="kp-key ${cls}${b.ledState === 'On' ? ' is-on' : ''}" type="button" title="${esc(title)}"
+          ${b.ledHref ? `data-led="${esc(b.ledHref)}"` : ''}
+          onpointerdown="Lutron.pressButton('${esc(b.href)}')" onpointerup="Lutron.releaseButton('${esc(b.href)}')"
+          onpointerleave="Lutron.releaseButton('${esc(b.href)}')" onpointercancel="Lutron.releaseButton('${esc(b.href)}')">
+          ${b.ledHref ? '<span class="kp-led" aria-hidden="true"></span>' : ''}<span class="kp-label">${esc(label)}</span>
+        </button>`;
+    };
+    const rows = (bg.rows || bg.buttons.map((b) => ({ type: 'button', id: b.id }))).map((row) => {
+      if (row.type === 'gap') return '<div class="kp-gap" aria-hidden="true"></div>';
+      if (row.type === 'pair') {
+        const lower = byId.get(row.lower);
+        const raise = byId.get(row.raise);
+        if (family.id === 'pico') return `<div class="kp-row">${key(raise || lower, 'kp-arrow')}</div>`;
+        return `<div class="kp-row kp-pair">${key(lower, 'kp-arrow')}${key(raise, 'kp-arrow')}</div>`;
+      }
+      return `<div class="kp-row">${key(byId.get(row.id))}</div>`;
+    }).join('');
+    const addresses = bg.buttons.filter((b) => b.number != null).map((b) => `
+      <tr><td>${esc(b.role === 'button' ? (b.engraving || b.name) : b.role === 'raise' ? 'Raise' : 'Lower')}</td>
+        <td>${esc(String(bg.deviceId ?? '—'))}</td><td>${esc(String(b.number))}</td><td>${esc(String(b.ledId ?? '—'))}</td></tr>`).join('');
+    return `
+      <div class="kp-card">
+        <div class="kp-head">
+          <div class="kp-name">${esc(bg.deviceName)}</div>
+          <div class="kp-meta">${esc([family.name, bg.model].filter(Boolean).join(' · '))}</div>
+        </div>
+        <div class="kp-plate kp-${esc(family.id)}"><div class="kp-keys">${rows}</div></div>
+        <details class="kp-addresses">
+          <summary>Savant addresses</summary>
+          <table>
+            <thead><tr><th>Button</th><th>Address1</th><th>Address2</th><th>Address3</th></tr></thead>
+            <tbody>${addresses}</tbody>
+          </table>
+          <div class="kp-addresses-note">Keypad Button rows: device, button number, LED.</div>
+        </details>
+      </div>`;
   }
 
   function handleLedUpdate(ledHref, state) {
     ledStates[ledHref] = state;
-    const el = $(ledId(ledHref));
-    if (el) el.classList.toggle('on', state === 'On');
+    for (const bg of inventory?.buttonGroups || []) {
+      for (const b of bg.buttons) if (b.ledHref === ledHref) b.ledState = state;
+    }
+    for (const el of document.querySelectorAll(`.kp-key[data-led="${CSS.escape(ledHref)}"]`)) el.classList.toggle('is-on', state === 'On');
   }
 
   // A mouse press+leave fires release twice; only send it once per press.
@@ -1202,7 +1258,7 @@
 
   window.Lutron = {
     startDiscovery, selectProcessor, selectManual, startPairing, reconnect, saveComponentName,
-    refreshInventory, exportLighting, setTypeFilter, clearZoneSearch,
+    refreshInventory, exportLighting, closeExport, downloadExport, reviewBeforeExport, setTypeFilter, clearZoneSearch,
     openPicker, closePicker, pickArea, pickLight, toggleLights, savePicker, resetPicker,
     addToZone, keepArea, readSavantZones, editSavantZones, closeSavantZones, saveSavantZones,
     reviewRooms, closeReview, pickReview, pickReviewOther, pickReviewLeaveOut, skipReview,
@@ -1226,6 +1282,7 @@
         closePicker();
         closeReview();
         closeSavantZones();
+        closeExport();
       });
     },
 

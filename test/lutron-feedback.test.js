@@ -1,17 +1,19 @@
 /**
- * Feedback for Savant (lutron/feedback.js): the levels each Savant host hasn't been sent yet,
- * answered in the fixed slots the LEAP Bridge profile reads. Against a stand-in controller
- * and clock, so every timing rule is checked exactly.
+ * Feedback for Savant (lutron/feedback.js): the levels and keypad LEDs each Savant host hasn't
+ * been sent yet, answered in the fixed slots the LEAP Bridge profile reads. Against a
+ * stand-in controller and clock, so every timing rule is checked exactly.
  */
 require('./support/harness');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ZoneFeedback, SLOTS, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
+const { ZoneFeedback, SLOTS, LED_SLOTS, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
-function setup(levels = { 101: 75, 102: 0, 201: 40 }) {
+function setup(levels = { 101: 75, 102: 0, 201: 40 }, leds = []) {
   const controller = {
     ready: true,
     zones: new Map(Object.entries(levels).map(([id, level]) => [Number(id), { id: Number(id), type: 'dimmer', level }])),
+    leds,
+    keypadLeds() { return this.leds; },
   };
   const clock = { t: 1_000_000 };
   const feedback = new ZoneFeedback({ getController: () => controller, now: () => clock.t });
@@ -106,4 +108,33 @@ test('the dashboard sees which hosts are asking; ones gone for an hour are forgo
   clock.t += 60 * 60 * 1000;
   feedback.poll('10.0.0.6');
   assert.deepEqual([...feedback.hosts.keys()], ['10.0.0.6']);
+});
+
+/** The distinct "<device>_<LED>" → 1/0 pairs in an LED answer, checking every slot is filled. */
+function ledsIn(answer) {
+  const out = {};
+  for (let i = 0; i < LED_SLOTS; i++) {
+    assert.ok(`k${i}` in answer && `o${i}` in answer, `LED slot ${i} is filled`);
+    out[answer[`k${i}`]] = answer[`o${i}`];
+  }
+  return out;
+}
+
+test('keypad LEDs go out once no level is waiting, keyed device_LED, and again when one changes', () => {
+  const led = (id, state) => ({ ledHref: `/led/${id}`, ledId: id, deviceId: 501, state });
+  const { feedback, controller } = setup({ 101: 75 }, [led(801, 'On'), led(802, 'Off'), led(803, null)]);
+  assert.deepEqual(levels(feedback.poll('10.0.0.5')), { 101: 75 }, 'levels first');
+  assert.deepEqual(ledsIn(feedback.poll('10.0.0.5')), { '501_801': 1, '501_802': 0 }, 'then LEDs; one not heard from yet is left out');
+  assert.deepEqual(feedback.poll('10.0.0.5'), {});
+
+  controller.leds[1].state = 'On';
+  feedback.ledChanged('/led/802');
+  assert.deepEqual(ledsIn(feedback.poll('10.0.0.5')), { '501_802': 1 });
+});
+
+test('Savant saying it just started gets everything again at once', () => {
+  const { feedback } = setup();
+  feedback.poll('10.0.0.5');
+  assert.deepEqual(feedback.poll('10.0.0.5'), {});
+  assert.deepEqual(levels(feedback.poll('10.0.0.5', { start: true })), { 101: 75, 102: 0, 201: 40 });
 });

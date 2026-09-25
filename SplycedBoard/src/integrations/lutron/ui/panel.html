@@ -233,6 +233,43 @@
 </div>
 
 <!-- Color / tuning modal -->
+<!-- Export: the lighting table for Blueprint, optionally with the keypads' buttons -->
+<div class="modal-overlay" id="ltExportModal" onclick="if (event.target === this) Lutron.closeExport()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ltExportTitle" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-titles">
+        <div class="modal-subtitle">Blueprint lighting table</div>
+        <div class="modal-title" id="ltExportTitle">Export lighting_export.plist</div>
+      </div>
+      <button class="modal-close" onclick="Lutron.closeExport()" aria-label="Close">✕</button>
+    </div>
+    <div class="alert alert-warn show" id="ltExportWaiting" hidden>
+      <span id="ltExportWaitingText"></span>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="Lutron.reviewBeforeExport()">Review first</button>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-name">Lights</div>
+        <div class="setting-desc" id="ltExportLights"></div>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-name">Keypad buttons</div>
+        <div class="setting-desc" id="ltExportKeypads"></div>
+      </div>
+      <label class="toggle" aria-label="Include keypad buttons">
+        <input type="checkbox" id="ltExportKeypadsToggle">
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <div class="btn-row" style="margin-top:20px">
+      <button class="btn btn-ghost btn-sm" onclick="Lutron.closeExport()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="Lutron.downloadExport()">⬇ Download</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="ltPickerModal" onclick="if (event.target === this) Lutron.closePicker()">
   <div class="modal lt-picker" role="dialog" aria-modal="true" aria-labelledby="ltPickerTitle">
     <div class="modal-header">

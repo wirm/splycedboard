@@ -63,20 +63,40 @@ function createState() {
       hvac: { temp: 71, heat: 68, cool: 76, mode: 'Auto', fan: 'Auto', state: 'Idle' },
     },
   ];
-  const keypad = {
-    deviceId: 501, stationId: 401, area: 1, name: 'Entry Keypad', buttonGroupId: 601,
-    buttons: [
-      { id: 701, number: 1, engraving: 'Welcome', led: 801, ledState: 'Off' },
-      { id: 702, number: 2, engraving: 'Cooking', led: 802, ledState: 'Off' },
-      { id: 703, number: 3, engraving: 'All Off', led: 803, ledState: 'Off' },
-    ],
-  };
+  // Keypads as a QSX lists them: a control station ("Entry") holds a device ("Device 1") of a
+  // type and model; buttons carry their faceplate position as ButtonNumber. Raise/lower (16/17,
+  // 18/19) have no LED and no programming model.
+  const keypads = [
+    {
+      deviceId: 501, stationId: 401, area: 1, station: 'Entry', type: 'SeeTouchKeypad', model: 'HQWD-W4S', buttonGroupId: 601,
+      buttons: [
+        { id: 701, number: 1, engraving: 'Welcome', led: 801, ledState: 'Off' },
+        { id: 702, number: 2, engraving: 'Cooking', led: 802, ledState: 'Off' },
+        { id: 703, number: 3, engraving: 'Dinner', led: 803, ledState: 'Off' },
+        { id: 704, number: 4, engraving: 'Night', led: 804, ledState: 'Off' },
+        { id: 706, number: 6, engraving: 'All Off', led: 806, ledState: 'On' },
+        { id: 718, number: 18 },
+        { id: 719, number: 19 },
+      ],
+    },
+    {
+      deviceId: 502, stationId: 402, area: 3, station: 'Bedside', type: 'PalladiomKeypad', model: 'HQWT-U-PRW', buttonGroupId: 602,
+      buttons: [
+        { id: 711, number: 1, engraving: 'Bright', led: 811, ledState: 'Off' },
+        { id: 712, number: 2, engraving: '', led: 812, ledState: 'Off' },
+        { id: 713, number: 3, engraving: 'Off', led: 813, ledState: 'Off' },
+        { id: 716, number: 16 },
+        { id: 717, number: 17 },
+      ],
+    },
+  ];
+  const keypad = keypads[0];
   const scenes = [
     { id: 1, name: 'All Off', programmed: true },
     { id: 2, name: 'Movie', programmed: true },
     { id: 3, name: 'Unused', programmed: false },
   ];
-  return { areas, zones, keypad, scenes };
+  return { areas, zones, keypads, keypad, scenes };
 }
 
 // ── Server ───────────────────────────────────────────────────────────────────
@@ -92,6 +112,12 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
   const { cert, key } = selfSigned('mock-qsx');
 
   const zoneById = (id) => state.zones.find((z) => z.id === id);
+  const keypadByDevice = (id) => state.keypads.find((k) => k.deviceId === id);
+  const buttonById = (id) => state.keypads.flatMap((k) => k.buttons).find((b) => b.id === id);
+  const ledStatus = (led) => {
+    const b = state.keypads.flatMap((k) => k.buttons).find((x) => x.led === led);
+    return b && { LEDStatus: { href: `/led/${led}/status`, LED: { href: `/led/${led}` }, State: b.ledState } };
+  };
   const areaHref = (id) => ({ href: `/area/${id}` });
 
   const zoneStatus = (z) => {
@@ -149,33 +175,52 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
       return { Zone: zone };
     }
     if ((m = url.match(/^\/area\/(\d+)\/associatedcontrolstation$/))) {
-      const k = state.keypad;
-      if (Number(m[1]) !== k.area) return { ControlStationList: [] };
       return {
-        ControlStationList: [{
+        ControlStationList: state.keypads.filter((k) => k.area === Number(m[1])).map((k) => ({
           href: `/controlstation/${k.stationId}`,
-          Name: 'Entry',
-          AssociatedGangedDevices: [{
-            Device: { href: `/device/${k.deviceId}`, Name: k.name, DeviceType: 'SunnataKeypad', AssociatedArea: areaHref(k.area) },
-          }],
-        }],
+          Name: k.station,
+          AssociatedGangedDevices: [{ Device: { href: `/device/${k.deviceId}`, DeviceType: k.type, AddressedState: 'Addressed' }, GangPosition: 0 }],
+        })),
+      };
+    }
+    if ((m = url.match(/^\/device\/(\d+)$/))) {
+      const k = keypadByDevice(Number(m[1]));
+      if (!k) return 404;
+      return {
+        Device: {
+          href: url, Name: 'Device 1', DeviceType: k.type, ModelNumber: k.model,
+          AssociatedArea: areaHref(k.area), AssociatedControlStation: { href: `/controlstation/${k.stationId}` },
+        },
       };
     }
     if ((m = url.match(/^\/device\/(\d+)\/buttongroup$/))) {
-      const k = state.keypad;
-      if (Number(m[1]) !== k.deviceId) return 404;
+      const k = keypadByDevice(Number(m[1]));
+      if (!k) return 404;
       return {
-        ButtonGroupList: [{
+        ButtonGroups: [{
           href: `/buttongroup/${k.buttonGroupId}`,
-          AssociatedDevice: { href: `/device/${k.deviceId}` },
-          Buttons: k.buttons.map((b) => ({ href: `/button/${b.id}`, ButtonNumber: b.number, AssociatedLED: { href: `/led/${b.led}` } })),
+          Parent: { href: `/device/${k.deviceId}` },
+          Buttons: k.buttons.map((b) => ({ href: `/button/${b.id}` })),
+          ProgrammingType: 'Freeform',
         }],
       };
     }
     if ((m = url.match(/^\/button\/(\d+)$/))) {
-      const b = state.keypad.buttons.find((x) => x.id === Number(m[1]));
-      return b ? { Button: { href: url, ButtonNumber: b.number, Engraving: { Text: b.engraving } } } : 404;
+      const b = buttonById(Number(m[1]));
+      if (!b) return 404;
+      const k = state.keypads.find((x) => x.buttons.includes(b));
+      return {
+        Button: {
+          href: url, ButtonNumber: b.number, Name: `Button ${b.number}`, Parent: { href: `/buttongroup/${k.buttonGroupId}` },
+          ...(b.led ? {
+            Engraving: { Text: b.engraving },
+            AssociatedLED: { href: `/led/${b.led}` },
+            ProgrammingModel: { href: `/programmingmodel/${b.id + 1}`, ProgrammingModelType: 'AdvancedToggleProgrammingModel' },
+          } : {}),
+        },
+      };
     }
+    if ((m = url.match(/^\/led\/(\d+)\/status$/))) return ledStatus(Number(m[1])) || 404;
     if (url === '/virtualbutton') {
       return { VirtualButtonList: state.scenes.map((s) => ({ href: `/virtualbutton/${s.id}`, Name: s.name, IsProgrammed: s.programmed })) };
     }
@@ -221,11 +266,11 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
       return 201;
     }
     if ((m = url.match(/^\/button\/(\d+)\/commandprocessor$/))) {
-      const b = state.keypad.buttons.find((x) => x.id === Number(m[1]));
+      const b = buttonById(Number(m[1]));
       if (!b) return 404;
       const event = cmd.CommandType === 'Release' ? 'Release' : 'Press';
       setImmediate(() => push({ ButtonStatus: { Button: { href: `/button/${b.id}` }, ButtonEvent: { EventType: event } } }));
-      if (event === 'Press') {
+      if (event === 'Press' && b.led) {
         b.ledState = b.ledState === 'On' ? 'Off' : 'On';
         setImmediate(() => push({ LEDStatus: { LED: { href: `/led/${b.led}` }, State: b.ledState } }));
       }
@@ -234,17 +279,25 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
     return 404;
   }
 
+  function subscribe(url) {
+    if (url === '/button/status') return 404;
+    if (url === '/led/status') return 400; // QSX: "This request is not supported"
+    const m = url.match(/^\/led\/(\d+)\/status$/);
+    if (m) return ledStatus(Number(m[1])) || 404;
+    return 200;
+  }
+
   function respond(socket, msg) {
     const { CommuniqueType: type, Header: { ClientTag: tag, Url: url } = {}, Body: body } = msg;
     received.push({ type, url, body });
 
     let result;
     if (type === 'ReadRequest') result = read(url);
-    else if (type === 'SubscribeRequest') result = url === '/button/status' ? 404 : 200;
+    else if (type === 'SubscribeRequest') result = subscribe(url);
     else if (type === 'CreateRequest') result = command(url, body);
     else result = 400;
 
-    if (type === 'SubscribeRequest' && result === 200) socket.subscribed = true;
+    if (type === 'SubscribeRequest' && (result === 200 || typeof result === 'object')) socket.subscribed = true;
 
     const code = typeof result === 'number' ? result : 200;
     const text = { 200: 'OK', 201: 'Created', 400: 'Bad Request', 404: 'Not Found', 405: 'Method Not Allowed' }[code];

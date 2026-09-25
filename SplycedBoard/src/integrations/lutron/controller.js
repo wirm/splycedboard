@@ -19,6 +19,7 @@
  *  'disconnect'        LEAP disconnected
  */
 const { EventEmitter } = require('events');
+const { keypadLayout, buttonRole } = require('./keypads');
 const { LeapClient } = require('./leap-client');
 
 // Maps LEAP ControlType to our simplified type
@@ -196,12 +197,12 @@ class LeapController extends EventEmitter {
             if (Array.isArray(ganged)) {
               for (const gang of ganged) {
                 const d = gang.Device || gang;
-                if (d?.href) this._addDevice(d, area);
+                if (d?.href) this._addDevice(d, area, station);
               }
             } else if (ganged?.href) {
-              this._addDevice(ganged, area);
+              this._addDevice(ganged, area, station);
             }
-            if (station.Device) this._addDevice(station.Device, area);
+            if (station.Device) this._addDevice(station.Device, area, station);
           }
         } catch (err) {
           this.log.info(`${area.name}: control station failed — ${err.message}`);
@@ -239,6 +240,7 @@ class LeapController extends EventEmitter {
             const resp = await this.client.request('ReadRequest', `${deviceHref}/buttongroup`);
             const list = resp.Body?.ButtonGroupList || resp.Body?.ButtonGroups || resp.Body?.ButtonGroupExpandedList || [];
             for (const bg of list) {
+              bg._deviceId = this._hrefId(deviceHref);
               bg._areaName = area.name;
               bg._stationName = station.Name || station.href;
               this._addButtonGroup(bg);
@@ -250,26 +252,37 @@ class LeapController extends EventEmitter {
 
     this.log.info(`Loaded ${this.buttonGroups.size} button groups`);
 
-    // Enrich button names — button group responses only carry hrefs, not full button detail.
-    // Fetch each /button/:id individually to get Engraving.Text (the designer label).
+    // Button detail: on QSX a button group lists only hrefs. Each /button/:id has the number
+    // (its position on the faceplate), engraving, LED and programming model.
     {
-      const missingName = (btn) => !btn.name || btn.name.startsWith('Button ');
+      const buttons = [...this.buttonGroups.values()].flatMap((bg) => bg.buttons)
+        .filter((btn) => btn.href && (btn.number == null || !btn.name || /^Button \d+$/.test(btn.name)));
       let enriched = 0;
-      for (const bg of this.buttonGroups.values()) {
-        for (const btn of bg.buttons) {
-          if (!btn.href || !missingName(btn)) continue;
-          try {
-            const resp = await this.client.request('ReadRequest', btn.href);
-            const b = resp.Body?.Button || resp.Body?.Buttons?.[0];
-            if (b) {
-              const name = b.Engraving?.Text || b.Name || b.FullyQualifiedName;
-              if (name) { btn.name = name; enriched++; }
-            }
-          } catch { /* ignore */ }
-        }
-      }
-      if (enriched) this.log.info(`Enriched ${enriched} button names`);
+      await eachLimited(buttons, 8, async (btn) => {
+        try {
+          const resp = await this.client.request('ReadRequest', btn.href);
+          const b = resp.Body?.Button || resp.Body?.Buttons?.[0];
+          if (!b) return;
+          Object.assign(btn, buttonDetail(b, btn));
+          enriched++;
+        } catch { /* keep what the group said */ }
+      });
+      if (enriched) this.log.info(`Read ${enriched} keypad buttons`);
     }
+
+    // Keypad models: what a control station lists doesn't carry ModelNumber
+    await eachLimited([...this.buttonGroups.values()], 8, async (bg) => {
+      const device = this.devices.get(bg.deviceId);
+      if (!device || device.modelNumber) return;
+      try {
+        const d = (await this.client.request('ReadRequest', device.href)).Body?.Device;
+        if (d) {
+          device.modelNumber = d.ModelNumber || null;
+          device.type = d.DeviceType || device.type;
+          device.model = d.ModelNumber || device.model;
+        }
+      } catch { /* the device type still tells the family */ }
+    });
 
     // Load virtual buttons (scenes)
     this.virtualButtons.clear();
@@ -326,16 +339,21 @@ class LeapController extends EventEmitter {
     });
   }
 
-  _addDevice(d, fallbackArea = null) {
+  _addDevice(d, fallbackArea = null, station = null) {
     const id = this._hrefId(d.href);
     if (!id) return;
     const areaId = this._hrefId(d.AssociatedArea?.href) ?? fallbackArea?.id;
     const area = this.areas.get(areaId) ?? fallbackArea;
+    // A device in a control station is "Device 1", "Device 2" by gang position: the station
+    // has the name people know it by ("Entry", or Designer's "Control Station 001").
+    const ownName = d.Name || d.FullyQualifiedName;
+    const name = station?.Name && (!ownName || /^Device \d+$/.test(ownName)) ? station.Name : ownName || `Device ${id}`;
     this.devices.set(id, {
       id,
       href: d.href,
-      name: d.Name || d.FullyQualifiedName || `Device ${id}`,
+      name,
       model: d.ModelNumber || d.DeviceType,
+      modelNumber: d.ModelNumber || null,
       type: d.DeviceType,
       areaId,
       areaName: area?.name || 'Unknown Area',
@@ -346,14 +364,14 @@ class LeapController extends EventEmitter {
   _addButtonGroup(bg) {
     const id = this._hrefId(bg.href);
     if (!id) return;
-    const deviceId = this._hrefId(bg.AssociatedDevice?.href) ?? bg._deviceId ?? null;
+    // QSX names the keypad as the group's Parent; others as AssociatedDevice
+    const parent = /^\/device\//.test(bg.Parent?.href || '') ? bg.Parent.href : null;
+    const deviceId = this._hrefId(parent || bg.AssociatedDevice?.href) ?? bg._deviceId ?? null;
     const device = this.devices.get(deviceId);
     const buttons = (bg.Buttons || []).map((btn) => ({
       id: this._hrefId(btn.href),
       href: btn.href,
-      name: btn.Engraving?.Text || btn.Name || `Button ${this._hrefId(btn.href)}`,
-      number: btn.ButtonNumber,
-      ledHref: btn.AssociatedLED?.href,
+      ...buttonDetail(btn, { name: `Button ${btn.ButtonNumber ?? this._hrefId(btn.href)}` }),
       ledState: null,
     }));
     this.buttonGroups.set(id, {
@@ -412,6 +430,20 @@ class LeapController extends EventEmitter {
         this.log.info('Subscribed to button status events');
       } catch { /* button subscriptions not available */ }
     }
+
+    // Keypad LEDs, one by one: QSX has no subscription for all of them (/led/status is "not
+    // supported"). Each answer carries the LED's state now; later changes arrive as LEDStatus.
+    const leds = [...this.buttonGroups.values()].flatMap((bg) => bg.buttons).filter((b) => b.ledHref);
+    let subscribed = 0;
+    await eachLimited(leds, 8, async (btn) => {
+      try {
+        const resp = await this.client.subscribe(`${btn.ledHref}/status`);
+        const state = resp.Body?.LEDStatus?.State;
+        if (state) btn.ledState = state;
+        subscribed++;
+      } catch { /* this processor doesn't report LEDs */ }
+    });
+    if (leds.length) this.log.info(`Subscribed to ${subscribed} of ${leds.length} keypad LEDs`);
   }
 
   _onMessage(msg) {
@@ -466,10 +498,12 @@ class LeapController extends EventEmitter {
     // LED status
     if (msg.Body.LEDStatus) {
       const ls = msg.Body.LEDStatus;
-      this.emit('ledUpdate', {
-        ledHref: ls.LED?.href,
-        state: ls.State ?? ls.LEDStatus, // LEAP sends State; LEDStatus kept for older payloads
-      });
+      const ledHref = ls.LED?.href;
+      const state = ls.State ?? ls.LEDStatus; // LEAP sends State; LEDStatus kept for older payloads
+      for (const bg of this.buttonGroups.values()) {
+        for (const btn of bg.buttons) if (btn.ledHref === ledHref) btn.ledState = state;
+      }
+      this.emit('ledUpdate', { ledHref, state });
       return;
     }
   }
@@ -695,6 +729,33 @@ class LeapController extends EventEmitter {
     return null;
   }
 
+  /** A button group as the dashboard draws it: its keypad's family, model and faceplate. */
+  _keypad(bg) {
+    const device = this.devices.get(bg.deviceId);
+    const deviceType = device?.type || null;
+    const model = device?.modelNumber || null;
+    const { family, rows } = keypadLayout({ deviceType, model, buttons: bg.buttons });
+    return {
+      ...bg,
+      deviceType,
+      model,
+      family,
+      rows,
+      buttons: bg.buttons.map((b) => ({ ...b, role: buttonRole(b, family.id), ledId: this._hrefId(b.ledHref) ?? null })),
+    };
+  }
+
+  /** Every keypad LED: which keypad it's on, and whether it's lit ('On' | 'Off' | null). */
+  keypadLeds() {
+    const leds = [];
+    for (const bg of this.buttonGroups.values()) {
+      for (const b of bg.buttons) {
+        if (b.ledHref) leds.push({ ledHref: b.ledHref, ledId: this._hrefId(b.ledHref), deviceId: bg.deviceId, state: b.ledState });
+      }
+    }
+    return leds;
+  }
+
   /** Reverse lookup: which device/button an LED href belongs to. */
   findLedButton(ledHref) {
     if (!ledHref) return null;
@@ -711,7 +772,7 @@ class LeapController extends EventEmitter {
       zones: Array.from(this.zones.values()),
       areas: Array.from(this.areas.values()),
       devices: Array.from(this.devices.values()),
-      buttonGroups: Array.from(this.buttonGroups.values()),
+      buttonGroups: Array.from(this.buttonGroups.values(), (bg) => this._keypad(bg)),
       virtualButtons: Array.from(this.virtualButtons.values()),
       thermostats: Array.from(this.thermostats.values()),
     };
@@ -721,6 +782,27 @@ class LeapController extends EventEmitter {
     this.client.destroy();
     this.removeAllListeners();
   }
+}
+
+/** What a LEAP Button says of itself, over what's known already. */
+function buttonDetail(b, known = {}) {
+  const engraving = b.Engraving?.Text ?? known.engraving ?? null;
+  return {
+    number: b.ButtonNumber ?? known.number ?? null,
+    engraving,
+    name: engraving || b.Name || b.FullyQualifiedName || known.name,
+    ledHref: b.AssociatedLED?.href ?? known.ledHref ?? null,
+    programmingModel: b.ProgrammingModel?.ProgrammingModelType ?? known.programmingModel ?? null,
+  };
+}
+
+/** Run fn over items, at most `limit` at a time. */
+async function eachLimited(items, limit, fn) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
 module.exports = { LeapController };

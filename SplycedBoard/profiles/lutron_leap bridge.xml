@@ -4,7 +4,7 @@
     manufacturer="Lutron"
     model="LEAP Bridge"
     device_class="Lighting_controller"
-    rpm_xml_version="1.14"
+    rpm_xml_version="1.15"
     minimum_component_engine_version="7.2">
     <notes>
         Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
@@ -24,7 +24,8 @@
         Address fields:
           Lighting/Shade table: Address1 = LEAP Zone ID
           Keypad Button entity: Address1 = LEAP Device ID, Address2 = Button Number,
-                                Address3 = LED ID (from Keypads tab in web UI)
+                                Address3 = LED ID (SplycedBoard's Keypads tab lists them
+                                under each keypad's "Savant addresses")
 
         State Variables:
           SystemType  — QSX or RA3 (informational; bridge auto-detects)
@@ -32,13 +33,19 @@
 
         Status feedback:
           HTTP can't push, so Savant asks SplycedBoard twice a second (PollFeedback)
-          for the levels that changed: at a keypad, in the Lutron app, in a scene, or
-          in SplycedBoard. The ZoneFeedback status message writes them into
+          for the levels and keypad LEDs that changed: at a keypad, in the Lutron app,
+          in a scene, or in SplycedBoard. ZoneFeedback writes levels into
           DimmerLevel_(zone) and ColorLevel_(zone), the states the lighting and shade
-          table rows show. Each load is also asked for its level once when Savant
-          starts (QueryDimmerLevel, read by the ZoneLevel status message).
+          table rows show; LEDFeedback lights IsCurrentLEDOn_(device)_(LED) for Keypad
+          Button rows. When Savant starts, FeedbackStart asks for everything again and
+          each load is asked for its level (QueryDimmerLevel, read by ZoneLevel).
 
         ====================== Change Log ======================
+        Version 1.15 Add: keypad LED feedback. SplycedBoard's feedback answers carry LEDs too, and the
+                             LEDFeedback status message lights IsCurrentLEDOn_(device)_(LED), the state a
+                             Keypad Button row shows (Address1 = device, Address2 = button, Address3 = LED,
+                             as the Keypads tab lists them). FeedbackStart asks for everything again when
+                             Savant starts.
         Version 1.14 Fix: status feedback, from what Savant's engine logged with 1.13.
                              QueryDimmerLevel and QueryHVACStatus are custom component actions, where Savant looks
                              for an entity's query_status_with_action ("Action … not found" before). ZoneFeedback's
@@ -195,6 +202,39 @@
         <state_variable name="FeedbackLevel30" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel30" state_center_type="integer"></state_variable>
         <state_variable name="FeedbackZone31" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone31" state_center_type="string"></state_variable>
         <state_variable name="FeedbackLevel31" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel31" state_center_type="integer"></state_variable>
+        <dynamic_state_variable name="IsCurrentLEDOn" owning_logical_component="Lighting_controller" state_center_binding="IsCurrentLEDOn" state_center_type="boolean">false</dynamic_state_variable>
+        <state_variable name="FeedbackLEDKey0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey0" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn0" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey1" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn1" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey2" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn2" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey3" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn3" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey4" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn4" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey5" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn5" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey6" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn6" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey7" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn7" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey8" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey8" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn8" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn8" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey9" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey9" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn9" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn9" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey10" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey10" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn10" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn10" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey11" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey11" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn11" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn11" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey12" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey12" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn12" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn12" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey13" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey13" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn13" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn13" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey14" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey14" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn14" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn14" state_center_type="boolean"></state_variable>
+        <state_variable name="FeedbackLEDKey15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey15" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLEDOn15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn15" state_center_type="boolean"></state_variable>
     </state_variable_list>
 
     <logical_component logical_component_name="Lighting_controller">
@@ -484,6 +524,132 @@
                             <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone30">FeedbackLevel30</update_state_variable>
                             <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
                             <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
+                        </action>
+                    </actions>
+                </run_elements>
+            </status_message>
+
+            <!-- Keypad LEDs that changed, answering PollFeedback once no level is waiting: 16
+                 slots, {"k0":"501_801","o0":1, … }, each lighting IsCurrentLEDOn_(device)_(LED), the
+                 state a Keypad Button row shows. Filled like ZoneFeedback: spares repeat the first. -->
+            <status_message name="LEDFeedback">
+                <root_object name="none" matches_required="all" format="json">
+                    <values path="/none/k0" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey0" type="string"></update>
+                    </values>
+                    <values path="/none/o0" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn0" type="boolean"></update>
+                    </values>
+                    <values path="/none/k1" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey1" type="string"></update>
+                    </values>
+                    <values path="/none/o1" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn1" type="boolean"></update>
+                    </values>
+                    <values path="/none/k2" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey2" type="string"></update>
+                    </values>
+                    <values path="/none/o2" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn2" type="boolean"></update>
+                    </values>
+                    <values path="/none/k3" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey3" type="string"></update>
+                    </values>
+                    <values path="/none/o3" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn3" type="boolean"></update>
+                    </values>
+                    <values path="/none/k4" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey4" type="string"></update>
+                    </values>
+                    <values path="/none/o4" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn4" type="boolean"></update>
+                    </values>
+                    <values path="/none/k5" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey5" type="string"></update>
+                    </values>
+                    <values path="/none/o5" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn5" type="boolean"></update>
+                    </values>
+                    <values path="/none/k6" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey6" type="string"></update>
+                    </values>
+                    <values path="/none/o6" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn6" type="boolean"></update>
+                    </values>
+                    <values path="/none/k7" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey7" type="string"></update>
+                    </values>
+                    <values path="/none/o7" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn7" type="boolean"></update>
+                    </values>
+                    <values path="/none/k8" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey8" type="string"></update>
+                    </values>
+                    <values path="/none/o8" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn8" type="boolean"></update>
+                    </values>
+                    <values path="/none/k9" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey9" type="string"></update>
+                    </values>
+                    <values path="/none/o9" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn9" type="boolean"></update>
+                    </values>
+                    <values path="/none/k10" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey10" type="string"></update>
+                    </values>
+                    <values path="/none/o10" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn10" type="boolean"></update>
+                    </values>
+                    <values path="/none/k11" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey11" type="string"></update>
+                    </values>
+                    <values path="/none/o11" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn11" type="boolean"></update>
+                    </values>
+                    <values path="/none/k12" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey12" type="string"></update>
+                    </values>
+                    <values path="/none/o12" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn12" type="boolean"></update>
+                    </values>
+                    <values path="/none/k13" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey13" type="string"></update>
+                    </values>
+                    <values path="/none/o13" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn13" type="boolean"></update>
+                    </values>
+                    <values path="/none/k14" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey14" type="string"></update>
+                    </values>
+                    <values path="/none/o14" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn14" type="boolean"></update>
+                    </values>
+                    <values path="/none/k15" matches_required="at_least_one">
+                        <update state="FeedbackLEDKey15" type="string"></update>
+                    </values>
+                    <values path="/none/o15" matches_required="at_least_one">
+                        <update state="FeedbackLEDOn15" type="boolean"></update>
+                    </values>
+                </root_object>
+                <run_elements>
+                    <actions>
+                        <action name="ApplyLEDFeedback">
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey0">FeedbackLEDOn0</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey1">FeedbackLEDOn1</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey2">FeedbackLEDOn2</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey3">FeedbackLEDOn3</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey4">FeedbackLEDOn4</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey5">FeedbackLEDOn5</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey6">FeedbackLEDOn6</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey7">FeedbackLEDOn7</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey8">FeedbackLEDOn8</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey9">FeedbackLEDOn9</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey10">FeedbackLEDOn10</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey11">FeedbackLEDOn11</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey12">FeedbackLEDOn12</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey13">FeedbackLEDOn13</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey14">FeedbackLEDOn14</update_state_variable>
+                            <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey15">FeedbackLEDOn15</update_state_variable>
                         </action>
                     </actions>
                 </run_elements>
@@ -1613,8 +1779,20 @@
                         <command_string type="character" http_request_type="GET">api/lutron/feedback</command_string>
                     </command>
                 </command_interface>
-                <execute_on_schedule period_ms="0"/>
                 <execute_on_schedule period_ms="500"/>
+            </action>
+
+            <!-- When Savant starts: every level and LED again, whatever SplycedBoard sent before. -->
+            <action name="FeedbackStart">
+                <command_interface interface="ip">
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/lutron/feedback</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?start=1]]></parameter>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+                <execute_on_schedule period_ms="0"/>
             </action>
 
             <!-- Tells SplycedBoard which version of this profile Savant is running, so its dashboard
@@ -1624,7 +1802,7 @@
                     <command response_required="no">
                         <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
                         <parameter_list>
-                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.14]]></parameter>
+                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.15]]></parameter>
                         </parameter_list>
                     </command>
                 </command_interface>

@@ -3,7 +3,9 @@
  * lighting data table doesn't have to be typed in by hand.
  *
  * Row layout mirrors a real Blueprint export. Ketra/Rania zones use Entity "DMX"
- * with state "CurrentColor" so Savant shows the color controls.
+ * with state "CurrentColor" so Savant shows the color controls. Keypad buttons, when
+ * asked for, are "Keypad Button" rows as Blueprint writes them: press and release, and the
+ * button's LED as its state (IsCurrentLEDOn_<device>_<LED>, which profile 1.15 feeds).
  */
 const { toPlist } = require('../../core/plist');
 
@@ -106,15 +108,114 @@ function lightingRow(zone, index, component, savantZones) {
   };
 }
 
+// A Keypad Button row's column flags: a light's, without Type
+const { Type: _type, ...KEYPAD_UMF } = UMF;
+
 /**
- * @param zones      iterable of controller zone objects
- * @param component  Blueprint component name
- * @param zonesFor   zone → the Savant zones it's in (rooms.js); none: the Lutron area's name
+ * One keypad button, as Blueprint writes a Keypad Button row: the row presses, its five
+ * children are the rest of the entity's toggle (release, OSD press and hold).
+ * @param k  { label, deviceId, number, ledId|null, areaName, savantZones: [] }
  */
-function buildLightingPlist(zones, component, { zonesFor = () => [] } = {}) {
+function keypadRow(k, index, component) {
+  const id = String(index);
+  const led = k.ledId != null ? String(k.ledId) : '';
+  const zones = Object.fromEntries((k.savantZones.length ? k.savantZones : [k.areaName]).map((z) => [z, true]));
+  const address = {
+    Address1: String(k.deviceId),
+    Address2: String(k.number),
+    Address3: led,
+    Address4: '',
+    Address5: '',
+    Address6: '',
+  };
+  const child = (command, commandType) => ({
+    ...address,
+    'Button Label': '',
+    Command: command,
+    'Command Type': commandType,
+    Controller: component,
+    'Controller Zone': k.areaName,
+    Enabled: 'YES',
+    Entity: 'Keypad Button',
+    Identifier: id,
+    Label: '',
+    LightsAreOn: false,
+    'Savant Keypad': '',
+    'Savant Zone': zones,
+    Technology: '',
+    Type: '',
+    'UI Type': 'Toggle',
+    shouldDefaultRow: true,
+  });
+  return {
+    ...address,
+    BLEGroupId: '',
+    BLENetworkKey: '',
+    BLENodeId: '',
+    'Button Label': k.label,
+    Command: 'ButtonPress',
+    'Command Type': 'Push Command',
+    Controller: component,
+    'Controller Zone': k.areaName,
+    DelayTime: '',
+    DimmerLevel: '',
+    Enabled: 'YES',
+    Entity: 'Keypad Button',
+    FadeTime: '',
+    Identifier: id,
+    IsSceneable: false,
+    Label: k.label,
+    LightsAreOn: false,
+    'Logical Component': 'Lighting_controller',
+    RoomLightsControl: 'No',
+    'Savant Keypad': '',
+    'Savant Zone': zones,
+    SavantAppGrouping: 'Scene',
+    ServiceID: 'SVC_ENV_LIGHTING',
+    State1: {
+      RPMStateName: `${component}.Lighting_controller.IsCurrentLEDOn_${k.deviceId}_${led || '0'}`,
+      RPMStateType: 'RPMComponentBasedStateName',
+      component,
+      identifiers: [
+        { description: '', name: 'DeviceID', value: String(k.deviceId) },
+        { description: '', name: 'LEDNumber', value: led || '0' },
+      ],
+      logicalComponent: 'Lighting_controller',
+      stateName: 'IsCurrentLEDOn',
+    },
+    State2: {},
+    Technology: '',
+    'Toggle Label': k.label,
+    Type: '',
+    'UI Type': 'Toggle',
+    UITypeChild: [
+      child('ButtonPress', 'Toggle Command'),
+      child('ButtonRelease', 'Release Command'),
+      child('ButtonRelease', 'Toggle Release Command'),
+      child('ButtonPressAndRelease', 'OSD Push Command'),
+      child('ButtonPressAndRelease', 'OSD Hold Command'),
+    ],
+    UMF: KEYPAD_UMF,
+    WholeHouseLightsControl: 'No',
+    hasCompiled: false,
+    maxKelvinTemp: '',
+    minKelvinTemp: '',
+    sendReleaseAfterHold: false,
+    shouldDefaultRow: true,
+  };
+}
+
+/**
+ * @param zones          iterable of controller zone objects
+ * @param component      Blueprint component name
+ * @param zonesFor       zone → the Savant zones it's in (rooms.js); none: the Lutron area's name
+ * @param keypadButtons  keypad buttons to add as Keypad Button rows (see keypadRow), after the lights
+ */
+function buildLightingPlist(zones, component, { zonesFor = () => [], keypadButtons = [] } = {}) {
   const rows = Array.from(zones)
     .filter(isLighting)
     .map((zone, i) => lightingRow(zone, i, component, zonesFor(zone)));
+  rows.push(...keypadButtons.map((k, i) => keypadRow(k, rows.length + i, component)));
   return toPlist({ Lighting: rows });
 }
 

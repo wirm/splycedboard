@@ -106,6 +106,7 @@ class LutronIntegration {
     });
     controller.on('ledUpdate', (e) => {
       this.telnet.ledChanged(e.ledHref, e.state);
+      this.feedback.ledChanged(e.ledHref);
       broadcast('ledUpdate', e);
     });
     controller.on('thermostatUpdate', ({ thermostat }) => broadcast('thermostatUpdate', { thermostat }));

@@ -119,64 +119,136 @@ input[type=range].shade-slider::-webkit-slider-thumb { background: var(--shade);
 .switch-wrap { display: flex; align-items: center; justify-content: space-between; }
 .switch-label { font-size: 13px; color: var(--muted); }
 
-/* ── Keypad ── */
-.keypad-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-}
-.keypad-card.wide { grid-column: span 2; min-width: 0; }
-
-.keypad-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
-.keypad-title {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.button-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.button-grid.multi-col {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.keypad-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
+/* ── Keypads: each family's faceplate structure (lutron/keypads.js), in Splyced's colors ── */
+.kp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+.kp-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s;
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
 }
-.keypad-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
-.keypad-btn:active { transform: scale(0.98); }
-.keypad-btn-label { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.keypad-btn-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.keypad-btn-num { font-size: 10px; color: var(--muted); }
+.kp-head { align-self: stretch; }
+.kp-name { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.kp-meta { font-family: var(--font-display); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
 
-.keypad-btn-led {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--border);
-  flex-shrink: 0;
-  transition: background 0.3s;
+.kp-plate {
+  width: 146px;
+  min-height: 236px;
+  padding: 24px 18px;
+  display: flex;
+  align-items: center;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 color-mix(in srgb, white 40%, transparent) inset, 0 12px 24px -18px rgba(31, 30, 26, 0.55);
 }
-.keypad-btn-led.on { background: var(--dimmer); box-shadow: 0 0 6px var(--dimmer); }
+.kp-keys { display: flex; flex-direction: column; gap: 9px; width: 100%; }
+.kp-row { display: flex; gap: 6px; }
+.kp-gap { height: 24px; }
+.kp-key {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.08s, background 0.15s, border-color 0.15s;
+}
+.kp-key:hover { border-color: var(--accent); }
+.kp-key:active { transform: translateY(1px); box-shadow: none; background: var(--accent-dim); border-color: var(--accent); }
+.kp-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-arrow { font-size: 9px; }
+.kp-blank { visibility: hidden; pointer-events: none; }
+/* Status LED: a dot left of the key, mustard when lit */
+.kp-led {
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--control);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.kp-key.is-on .kp-led { background: var(--mustard); box-shadow: 0 0 8px var(--mustard); }
+
+/* seeTouch: slim keys in seven positions, LEDs beside them, a raise/lower pair below */
+.kp-seetouch .kp-keys { padding-left: 14px; }
+.kp-seetouch .kp-key { height: 22px; }
+.kp-seetouch .kp-gap { height: 22px; }
+
+/* Sunnata: a narrow plate, broad keys with the LED inside, a split rocker for raise/lower */
+.kp-sunnata { width: 128px; }
+.kp-sunnata .kp-key { height: 34px; border-radius: 3px; }
+.kp-sunnata .kp-led { left: 8px; }
+.kp-sunnata .kp-pair { gap: 0; }
+.kp-sunnata .kp-pair .kp-key:first-child { border-radius: 3px 0 0 3px; }
+.kp-sunnata .kp-pair .kp-key:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+
+/* Palladiom: a squarer plate of flat keys meeting at seams; the engraving glows when on */
+.kp-palladiom { width: 176px; min-height: 196px; padding: 18px; }
+.kp-palladiom .kp-keys { gap: 0; }
+.kp-palladiom .kp-row { gap: 0; }
+.kp-palladiom .kp-key { height: 42px; border-radius: 0; box-shadow: none; }
+.kp-palladiom .kp-row + .kp-row .kp-key { border-top: none; }
+.kp-palladiom .kp-pair .kp-key + .kp-key { border-left: none; }
+.kp-palladiom .kp-row:first-child .kp-key:first-child { border-top-left-radius: 4px; }
+.kp-palladiom .kp-row:first-child .kp-key:last-child { border-top-right-radius: 4px; }
+.kp-palladiom .kp-row:last-child .kp-key:first-child { border-bottom-left-radius: 4px; }
+.kp-palladiom .kp-row:last-child .kp-key:last-child { border-bottom-right-radius: 4px; }
+.kp-palladiom .kp-led { display: none; }
+.kp-palladiom .kp-key.is-on .kp-label { color: var(--accent-text); text-shadow: 0 0 10px color-mix(in srgb, var(--mustard) 70%, transparent); }
+
+/* Alisse: keys with a slim LED bar at the edge, round raise/lower buttons */
+.kp-alisse { width: 172px; }
+.kp-alisse .kp-key { height: 30px; border-radius: 6px; }
+.kp-alisse .kp-led { left: 6px; width: 3px; height: 14px; margin-top: -7px; border-radius: 2px; }
+.kp-alisse .kp-pair { justify-content: center; gap: 18px; }
+.kp-alisse .kp-pair .kp-key { flex: 0 0 32px; height: 32px; border-radius: 50%; padding: 0; }
+
+/* Pico: a small pill-shaped remote */
+.kp-pico { width: 78px; min-height: 206px; padding: 22px 12px; border-radius: 39px; }
+.kp-pico .kp-keys { gap: 10px; }
+.kp-pico .kp-key { height: 26px; border-radius: 13px; font-size: 9px; }
+.kp-pico .kp-led { display: none; }
+
+/* What Blueprint's Keypad Button rows need */
+.kp-addresses { align-self: stretch; font-size: 12px; color: var(--muted); }
+.kp-addresses summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+}
+.kp-addresses table { width: 100%; margin-top: 8px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.kp-addresses th { text-align: left; font-weight: 600; color: var(--muted); font-size: 10px; letter-spacing: 0.06em; padding: 3px 4px; border-bottom: 1px solid var(--border); }
+.kp-addresses td { padding: 3px 4px; color: var(--text); border-bottom: 1px solid var(--border-soft); }
+.kp-addresses td:first-child { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-addresses-note { margin-top: 6px; font-size: 11px; }
 
 /* ── Scenes ── */
 .scene-grid {

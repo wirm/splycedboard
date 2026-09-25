@@ -129,7 +129,7 @@ test('several top-level areas are floors, not a project: they stay in the path a
   assert.deepEqual([r.area(10).suggestion.zone, r.area(20).suggestion.zone], ['1st Floor Hall', '2nd Floor Hall']);
 });
 
-test('only areas with lights are listed, in hierarchy order, each with its lights', () => {
+test('rooms are listed in hierarchy order, each with its lights', () => {
   const r = build(['Kitchen']);
   assert.deepEqual(r.areas.map((a) => [...a.path, a.name].join(' › ')), [
     'Main Floor › Kitchen', 'Main Floor › Kitchen Island', 'Main Floor › Living Room', 'Main Floor › Wine Cellar',
@@ -148,4 +148,24 @@ test('no Savant zones yet: nothing is placed, and it says why', () => {
   const r = build([]);
   assert.equal(r.counts.placed, 0);
   assert.match(r.area(10).reason, /No Savant zones yet/);
+});
+
+test('every room is listed, lights or not; a floor or the project only when lights sit on it', () => {
+  const areas = [
+    { id: 1, name: 'Smith Residence', parentId: null },
+    { id: 2, name: 'Main Floor', parentId: 1 },
+    { id: 11, name: 'Kitchen', parentId: 2 },
+    { id: 14, name: 'Mudroom', parentId: 2 }, // keypads only
+    { id: 3, name: 'Upstairs', parentId: 1 }, // a hall light sits on the floor itself
+    { id: 31, name: 'Bedroom', parentId: 3, isLeaf: true },
+    { id: 32, name: 'Attic', parentId: 3, isLeaf: false }, // Lutron says it holds areas; none came with it
+  ];
+  const r = build(['Kitchen', 'Mudroom', 'Upstairs Hall'], {}, areas, lightsIn(11, 3));
+  assert.deepEqual(r.areas.map((a) => [[...a.path, a.name].join(' › '), a.lights.length]), [
+    ['Main Floor › Kitchen', 1], ['Main Floor › Mudroom', 0], ['Upstairs', 1], ['Upstairs › Bedroom', 0],
+  ]);
+  // A room without lights still goes in its zone: its keypads follow it into the export
+  assert.deepEqual(r.inZone('Mudroom'), [14]);
+  assert.deepEqual([r.zone('Mudroom').lights, r.area(14).placed, r.area(14).zones], [0, true, { Mudroom: [] }]);
+  assert.deepEqual(overrideFor('Kitchen', { areas: [11, 14], lights: [] }, r), { addAreas: [14], removeAreas: [], addLights: [] });
 });

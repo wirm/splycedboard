@@ -70,13 +70,14 @@ async function exported() {
   };
 }
 
-test('lists the Lutron areas that have lights, with their place in the hierarchy', async () => {
+test('lists every Lutron room, with its place in the hierarchy and its lights, if any', async () => {
   const { status, json } = await hub.get('/api/lutron/rooms');
   assert.equal(status, 200);
   assert.deepEqual(json.savant, { zones: [], source: null, at: null });
   assert.deepEqual(json.areas.map((a) => [[...a.path, a.name].join(' › '), a.lights.map((l) => l.name)]), [
     ['Main Floor › Kitchen', ['Kitchen Cans', 'Pendants']],
     ['Main Floor › Living Room', ['Cove Ketra', 'Ceiling Fan']],
+    ['Main Floor › Mudroom', []],
     ['Upstairs › Primary Suite', ['Vanity Rania']],
   ]);
   assert.deepEqual(json.controller, { name: 'LutronLeapBridge', source: 'default', found: null });
@@ -189,6 +190,14 @@ test("a zone's areas and single lights are chosen freely, and a light can be in 
 
   ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', automatic: true }));
   assert.deepEqual(zonesOf(json).Kitchen, ['Kitchen'], 'back to the automatic match');
+});
+
+test('a room without lights can be put in a zone', async () => {
+  let { json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', areas: [1, 4], lights: [] });
+  assert.deepEqual(zonesOf(json).Kitchen, ['Kitchen', 'Mudroom']);
+  assert.deepEqual(json.areas.find((a) => a.name === 'Mudroom').zones, { Kitchen: [] });
+  ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', automatic: true }));
+  assert.deepEqual(zonesOf(json).Kitchen, ['Kitchen']);
 });
 
 test('an area taken out of its zone can be left out on purpose, and putting it back undoes that', async () => {

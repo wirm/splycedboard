@@ -359,7 +359,7 @@
   function zoneCard(z, i) {
     const chips = z.areas.map((za) => {
       const a = areaById(za.areaId);
-      const count = za.whole ? plural(a.lights.length, 'light') : `${za.lightIds.length} of ${plural(a.lights.length, 'light')}`;
+      const count = !a.lights.length ? 'no lights' : za.whole ? plural(a.lights.length, 'light') : `${za.lightIds.length} of ${plural(a.lights.length, 'light')}`;
       const how = za.auto ? `Matched automatically: ${HOW[a.how] || ''}` : 'Chosen by you';
       return `<span class="lt-chip-lutron${za.auto ? ' is-auto' : ''}" title="${esc(how)}">${esc(trail(a))}<small>${count}</small></span>`;
     }).join('');
@@ -390,7 +390,7 @@
         <div class="lt-unplaced${waiting ? ' is-review' : ''}">
           <div class="lt-unplaced-area">
             <div class="lt-room-name">${esc(a.name)}</div>
-            <div class="lt-room-path" title="${esc(a.lights.map((l) => l.name).join(', '))}">${a.path.length ? `${esc(a.path.join(' › '))} · ` : ''}${plural(a.lights.length, 'light')}</div>
+            <div class="lt-room-path" title="${esc(a.lights.map((l) => l.name).join(', '))}">${a.path.length ? `${esc(a.path.join(' › '))} · ` : ''}${a.lights.length ? plural(a.lights.length, 'light') : 'no lights'}</div>
             <div class="lt-room-note">${waiting ? '⚠ ' : ''}${esc(a.reason || '')}</div>
           </div>
           <div class="lt-unplaced-actions">
@@ -473,14 +473,14 @@
     $('ltPickerTree').innerHTML = rows.join('') || '<div class="lt-tree-none">Nothing matches.</div>';
     $('ltPickerTree').querySelectorAll('input[data-some="true"]').forEach((box) => { box.indeterminate = true; });
 
-    const chosen = [...picker.selected.values()].filter((ids) => ids.size);
-    const lights = chosen.reduce((n, ids) => n + ids.size, 0);
-    $('ltPickerCount').textContent = `${plural(chosen.length, 'area')}, ${plural(lights, 'light')}`;
+    // An area is chosen while it has a key: for one without lights, the key is all there is
+    const lights = [...picker.selected.values()].reduce((n, ids) => n + ids.size, 0);
+    $('ltPickerCount').textContent = `${plural(picker.selected.size, 'area')}, ${plural(lights, 'light')}`;
   }
 
   function treeArea(a, depth, showLights) {
     const chosen = picker.selected.get(a.areaId) || new Set();
-    const state = chosen.size === 0 ? 'none' : chosen.size === a.lights.length ? 'all' : 'some';
+    const state = !picker.selected.has(a.areaId) ? 'none' : chosen.size === a.lights.length ? 'all' : 'some';
     const elsewhere = Object.keys(a.zones).filter((z) => z !== picker.zone);
     const suggested = a.suggestion?.zone === picker.zone && state === 'none';
     const open = showLights || picker.open.has(a.areaId);
@@ -502,10 +502,10 @@
         <label class="lt-tree-check">
           <input type="checkbox" ${state === 'all' ? 'checked' : ''} data-some="${state === 'some'}" onchange="Lutron.pickArea(${a.areaId}, this.checked)">
           <span class="lt-tree-name">${esc(a.name)}</span>
-          <span class="lt-tree-count">${plural(a.lights.length, 'light')}</span>
+          <span class="lt-tree-count">${a.lights.length ? plural(a.lights.length, 'light') : 'no lights'}</span>
         </label>
         <span class="lt-tree-tags">${tags}</span>
-        <button class="lt-tree-toggle" onclick="Lutron.toggleLights(${a.areaId})" aria-expanded="${open}">${open ? '▾' : '▸'} lights</button>
+        ${a.lights.length ? `<button class="lt-tree-toggle" onclick="Lutron.toggleLights(${a.areaId})" aria-expanded="${open}">${open ? '▾' : '▸'} lights</button>` : ''}
       </div>${lights}`;
   }
 

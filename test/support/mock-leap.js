@@ -50,6 +50,7 @@ function createState() {
     { id: 1, name: 'Kitchen', parent: 110 },
     { id: 2, name: 'Living Room', parent: 110 },
     { id: 3, name: 'Primary Suite', parent: 120 },
+    { id: 4, name: 'Mudroom', parent: 110 }, // no lights: a room all the same
   ];
   const zones = [
     { id: 101, area: 1, name: 'Kitchen Cans', type: 'Dimmed', level: 75 },

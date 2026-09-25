@@ -123,8 +123,12 @@ keypad's Lutron area went in on the Rooms tab. Raise and lower come too; they ha
 ### Rooms: Lutron Areas → Savant Blueprint Zones
 
 Each light in the export goes in a Savant zone, so Blueprint doesn't need them assigned by
-hand. The **Rooms** tab has one row per zone: the **Savant Blueprint Zone** in gold, and the
-**Lutron Areas** in it in blue.
+hand. So does each keypad button, when the export includes them. The **Rooms** tab has one row
+per zone: the **Savant Blueprint Zone** in orange, and the **Lutron Areas** in it in teal.
+
+Every Lutron room is listed, lights or not: a room with only keypads still belongs in a Savant
+zone. A room is an area at the bottom of Lutron's tree. The project, and floors that only hold
+rooms, stay out, unless lights sit on them directly.
 
 1. **Get Savant's zones.** **Read zones from Savant** reads them from the configuration Savant
    runs on the Pro Host (`userConfig.rpmConfig`). If that isn't there, it asks

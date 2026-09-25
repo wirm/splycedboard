@@ -118,16 +118,21 @@ function compare(area, zone) {
 const round = (n) => Math.round(n * 100) / 100;
 
 /**
- * The automatic side: every Lutron area with lights, where it sits, and its best Savant
- * zones. status: auto (goes in its suggestion by itself) | review | none.
+ * The automatic side: every Lutron room, where it sits, and its best Savant zones.
+ * status: auto (goes in its suggestion by itself) | review | none.
+ *
+ * A room is an area at the bottom of Lutron's tree (IsLeaf, or with no areas under it),
+ * lights or not: one with only keypads still belongs in a Savant zone. An area above others
+ * (a floor, the project) is listed only if lights sit on it directly.
  */
 function suggest({ areas, lights, savantZones }) {
   const byId = new Map(areas.map((a) => [a.id, a]));
+  const hasChildren = new Set(areas.map((a) => a.parentId).filter((id) => byId.has(id)));
 
   // One area holding all the others is the project itself: it says nothing about rooms.
   // Several top-level areas (floors, say) do, and stay.
   const roots = areas.filter((a) => !byId.has(a.parentId));
-  const project = roots.length === 1 ? roots[0].id : null;
+  const project = roots.length === 1 && hasChildren.has(roots[0].id) ? roots[0].id : null;
 
   /** Parents' names, top first. */
   const pathOf = (area) => {
@@ -149,7 +154,9 @@ function suggest({ areas, lights, savantZones }) {
     lightsOf.get(l.areaId).push({ id: l.id, name: l.name });
   }
 
-  const entries = [...lightsOf.keys()].map((id) => {
+  const isRoom = (a) => a.id !== project && (a.isLeaf ?? !hasChildren.has(a.id));
+  const listed = areas.filter((a) => lightsOf.has(a.id) || isRoom(a)).map((a) => a.id);
+  const entries = listed.map((id) => {
     const area = byId.get(id);
     const path = pathOf(area);
     const own = words(area.name);
@@ -179,7 +186,7 @@ function suggest({ areas, lights, savantZones }) {
       areaId: e.area.id,
       name: e.area.name,
       path: e.path,
-      lights: lightsOf.get(e.area.id),
+      lights: lightsOf.get(e.area.id) || [],
       status: 'none',
       how: best?.how || null,
       suggestion: best || null,
@@ -209,7 +216,7 @@ function suggest({ areas, lights, savantZones }) {
 /**
  * Everything the Rooms tab and the export need.
  *
- * @param areas         Lutron areas: { id, name, parentId }
+ * @param areas         Lutron areas: { id, name, parentId, isLeaf? }
  * @param lights        the Lutron loads being exported: { id, name, areaId }
  * @param savantZones   Savant's zone names, in Savant's order
  * @param overrides     per zone: { addAreas, removeAreas, addLights } (see top)

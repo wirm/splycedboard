@@ -6,7 +6,9 @@
     "SplycedBoard"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "package": "tools/package.sh",
+    "check-package": "node tools/check-package.js"
   },
   "devDependencies": {
     "fast-srp-hap": "^2.0.4"

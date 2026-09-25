@@ -9,3 +9,6 @@ data/
 
 # macOS
 .DS_Store
+
+# Release downloads built by npm run package
+dist/

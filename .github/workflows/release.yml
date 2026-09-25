@@ -1,0 +1,66 @@
+# Publishes a GitHub release that Pro Hosts install from. The newest one is always at
+#
+#   https://github.com/wirm/splycedboard/releases/latest/download/SplycedBoard.tar.gz
+#   https://github.com/wirm/splycedboard/releases/latest/download/SplycedBoard.zip
+#
+# Runs when a version tag is pushed; see "Release" in the README.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # to create the release
+
+jobs:
+  release:
+    runs-on: macos-latest # the installer only runs on macOS
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check the tag matches SplycedBoard/package.json
+        run: |
+          version="$(node -p "require('./SplycedBoard/package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version $version in SplycedBoard/package.json"
+            exit 1
+          fi
+
+      - name: Install development dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build SplycedBoard.tar.gz and SplycedBoard.zip
+        run: npm run package
+
+      - name: Test-install the package
+        run: npm run check-package
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          {
+            echo '**Install or update on a Pro Host:** paste into Terminal'
+            echo
+            echo '```bash'
+            printf 'cd "$(mktemp -d)" && curl -fsSLO %s/SplycedBoard.tar.gz && tar -xzf SplycedBoard.tar.gz && ./SplycedBoard/install\n' "$url"
+            echo '```'
+            echo
+            echo 'Or download **SplycedBoard.zip** below, unzip it, and run `./install` inside it from Terminal.'
+          } > "$RUNNER_TEMP/notes.md"
+          # A tag like v2.1.0-beta.1 is a pre-release, which the "latest" download link skips.
+          prerelease=()
+          case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/SplycedBoard.tar.gz dist/SplycedBoard.zip \
+            --title "SplycedBoard $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes \
+            "${prerelease[@]}"

@@ -174,4 +174,5 @@ it into Blueprint.
 ```bash
 npm test                    # from the repository root
 SplycedBoard/scripts/dev    # run the service in the foreground with live logs
+npm run package && npm run check-package   # after committing: does the host download include it?
 ```

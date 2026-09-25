@@ -10,7 +10,8 @@ switched on or off from a web dashboard without restarting anything.
 | **Apple TV** | IP control of any number of Apple TVs (Companion protocol, PIN pairing, no HomeKit) | `profiles/apple_tv_ip.xml` | [docs/appletv.md](docs/appletv.md) |
 | **SCLI Bridge** | Lets other devices read/write Savant state and send service requests via `sclibridge` | `profiles/ip_requests.xml` | [docs/scli.md](docs/scli.md) |
 
-This folder is everything a Pro Host needs — copy it over and run `./install`.
+This folder is everything a Pro Host needs, and one Terminal command downloads and installs it;
+see [Install](#install).
 
 ---
 
@@ -43,13 +44,21 @@ cloud dependency.
 
 ## Install
 
-Copy this folder to the Pro Host (AirDrop, USB, `scp -r`), open Terminal in it and run:
+On the Pro Host, open Terminal and paste:
 
 ```bash
-./install
+cd "$(mktemp -d)" && curl -fsSLO https://github.com/wirm/splycedboard/releases/latest/download/SplycedBoard.tar.gz && tar -xzf SplycedBoard.tar.gz && ./SplycedBoard/install
 ```
 
-(You can also double-click `install` in Finder.) The installer opens a few macOS dialogs:
+That downloads the latest release of this folder from GitHub and opens its installer.
+
+If you already have the folder, open Terminal in it and run `./install`. You might have downloaded
+`SplycedBoard.zip` from the [latest release](https://github.com/wirm/splycedboard/releases/latest)
+in a browser, or copied the folder over with AirDrop, USB or `scp -r`. Use Terminal rather than
+double-clicking `install`: macOS blocks double-clicked scripts that came from a download or
+AirDrop.
+
+The installer opens a few macOS dialogs:
 
 1. **Install / Update** confirmation
 2. **Which integrations** to switch on (changeable later on the dashboard)
@@ -78,8 +87,9 @@ Options: `./install --headless` asks in the terminal instead (automatic over SSH
 
 ### Update
 
-Re-run `./install` from the newer copy. Settings, pairing and integration choices are kept.
-Dependencies are only re-downloaded when `package.json` changed.
+Paste the Terminal line from [Install](#install) again; it always fetches the latest release.
+Re-running `./install` from any newer copy works too. Settings, pairing and integration choices
+are kept. Dependencies are only re-downloaded when `package.json` changed.
 
 ### What's in ~/Desktop/SplycedBoard
 

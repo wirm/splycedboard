@@ -51,13 +51,21 @@ const zonesOf = (view) => Object.fromEntries(view.zones.map((z) => [z.name, z.ar
   return a.whole ? area.name : [area.name, a.lightIds];
 })]));
 
-/** The exported plist, as Blueprint reads it: light label → [its Savant zones], and the controller. */
+/**
+ * The exported plist, as Blueprint reads it: light label → [its Savant zones], label → its
+ * Controller Zone, and the controller. Blueprint's own rows name the Savant zone in Controller
+ * Zone too: it's the row's first Savant zone, never the Lutron area once the light is placed.
+ */
 async function exported() {
   const res = await fetch(`${hub.base}/api/lutron/export/lighting`);
   assert.equal(res.status, 200);
   const json = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '-'], { input: await res.text() }).toString());
+  for (const row of json.Lighting) {
+    assert.equal(row['Controller Zone'], Object.keys(row['Savant Zone'])[0], `${row.Label}: Controller Zone is its (first) Savant zone`);
+  }
   return {
     zones: Object.fromEntries(json.Lighting.map((row) => [row.Label, Object.keys(row['Savant Zone'])])),
+    controllerZones: Object.fromEntries(json.Lighting.map((row) => [row.Label, row['Controller Zone']])),
     controllers: [...new Set(json.Lighting.map((row) => row.Controller))],
   };
 }
@@ -168,7 +176,7 @@ test("a zone's areas and single lights are chosen freely, and a light can be in 
   });
   assert.deepEqual(json.areas.find((a) => a.name === 'Living Room').zones, { Kitchen: [202, 203], Living: [202, 203] });
 
-  const { zones } = await exported();
+  const { zones, controllerZones } = await exported();
   assert.deepEqual(zones, {
     'Kitchen Cans': ['Kitchen'],
     Pendants: ['Kitchen', 'Living'],
@@ -176,6 +184,8 @@ test("a zone's areas and single lights are chosen freely, and a light can be in 
     'Ceiling Fan': ['Kitchen', 'Living'],
     'Vanity Rania': ['Primary Suite'],
   });
+  // Controller Zone names the Savant zone, not the Lutron area: the first, for a light in several
+  assert.deepEqual([controllerZones['Cove Ketra'], controllerZones['Kitchen Cans']], ['Kitchen', 'Kitchen'], 'Cove Ketra is in the Living Room area');
 
   ({ json } = await hub.put('/api/lutron/rooms/zone', { zone: 'Kitchen', automatic: true }));
   assert.deepEqual(zonesOf(json).Kitchen, ['Kitchen'], 'back to the automatic match');

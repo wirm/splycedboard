@@ -58,9 +58,13 @@ function stateRef(component, zoneId, stateName) {
 /** A load the lighting table covers (shades and thermostats have tables of their own). */
 const isLighting = (zone) => EXPORT_TYPES.has(zone.type);
 
+/** The Savant zones a row goes in; none chosen: the Lutron area's name. */
+const zonesOrArea = (savantZones, areaName) => (savantZones.length ? savantZones : [areaName]);
+
 function lightingRow(zone, index, component, savantZones) {
   const meta = rowMeta(zone.type);
   const state = stateRef(component, zone.id, meta.stateName);
+  const zones = zonesOrArea(savantZones, zone.areaName);
   return {
     Address1: String(zone.id),
     Address2: '',
@@ -75,7 +79,8 @@ function lightingRow(zone, index, component, savantZones) {
     Command: meta.command,
     'Command Type': 'Push Command',
     Controller: component,
-    'Controller Zone': zone.areaName,
+    // Blueprint's own rows name the Savant zone here, as in Savant Zone (the first, for a light in several)
+    'Controller Zone': zones[0],
     DelayTime: '0',
     DimmerLevel: '',
     Enabled: 'YES',
@@ -88,8 +93,8 @@ function lightingRow(zone, index, component, savantZones) {
     'Logical Component': 'Lighting_controller',
     RoomLightsControl: 'Active',
     'Savant Keypad': '',
-    // One light can be in several Savant zones; none chosen: the Lutron area's name.
-    'Savant Zone': Object.fromEntries((savantZones.length ? savantZones : [zone.areaName]).map((z) => [z, true])),
+    // One light can be in several Savant zones
+    'Savant Zone': Object.fromEntries(zones.map((z) => [z, true])),
     SavantAppGrouping: meta.group,
     ServiceID: 'SVC_ENV_LIGHTING',
     State1: state,
@@ -119,7 +124,8 @@ const { Type: _type, ...KEYPAD_UMF } = UMF;
 function keypadRow(k, index, component) {
   const id = String(index);
   const led = k.ledId != null ? String(k.ledId) : '';
-  const zones = Object.fromEntries((k.savantZones.length ? k.savantZones : [k.areaName]).map((z) => [z, true]));
+  const zoneNames = zonesOrArea(k.savantZones, k.areaName);
+  const zones = Object.fromEntries(zoneNames.map((z) => [z, true]));
   const address = {
     Address1: String(k.deviceId),
     Address2: String(k.number),
@@ -134,7 +140,7 @@ function keypadRow(k, index, component) {
     Command: command,
     'Command Type': commandType,
     Controller: component,
-    'Controller Zone': k.areaName,
+    'Controller Zone': zoneNames[0],
     Enabled: 'YES',
     Entity: 'Keypad Button',
     Identifier: id,
@@ -156,7 +162,7 @@ function keypadRow(k, index, component) {
     Command: 'ButtonPress',
     'Command Type': 'Push Command',
     Controller: component,
-    'Controller Zone': k.areaName,
+    'Controller Zone': zoneNames[0],
     DelayTime: '',
     DimmerLevel: '',
     Enabled: 'YES',

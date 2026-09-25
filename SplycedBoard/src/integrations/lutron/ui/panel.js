@@ -50,6 +50,12 @@
     $('bridgePortChip').textContent = status.bridgePort;
     $('webPortChip').textContent = status.webPort;
     $('pairedChip').innerHTML = `Processor: <strong>${esc(status.processor.host)}</strong>`;
+    // Savant asks for level changes twice a second, from profile 1.13 on (feedback.js)
+    const from = status.feedbackFrom || [];
+    $('feedbackChip').innerHTML = `Savant feedback: <strong>${from.length ? esc(from.join(', ')) : 'not polling'}</strong>`;
+    $('feedbackChip').title = from.length
+      ? 'Savant is asking for level changes twice a second'
+      : 'Savant asks for level changes with the Lutron LEAP Bridge profile 1.13 or later';
   }
 
   async function refresh() {

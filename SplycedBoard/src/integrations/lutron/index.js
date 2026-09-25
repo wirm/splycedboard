@@ -2,8 +2,9 @@
  * Lutron LEAP integration.
  *
  * Owns the LEAP connection to one HomeWorks QSX / RadioRA 3 processor and exposes it
- * to Savant two ways: the HTTP endpoints in routes.js (used by the Savant profile) and
- * the HomeWorks QS–style telnet bridge on port 8023.
+ * to Savant two ways: the HTTP endpoints in routes.js (used by the Savant profile, which
+ * polls feedback.js for the levels that changed) and the HomeWorks QS–style telnet bridge
+ * on port 8023.
  *
  * Settings (data/lutron/settings.json):
  *   processor      { id, host, name, pairedAt, port? }   written by pairing
@@ -14,6 +15,7 @@ const path = require('path');
 
 const { LeapController } = require('./controller');
 const { TelnetBridge, TELNET_PORT } = require('./telnet-bridge');
+const { ZoneFeedback } = require('./feedback');
 const { CertStore } = require('./certs');
 const { pairWithProcessor } = require('./pairing');
 const { migrateLegacyConfig } = require('./legacy-config');
@@ -30,6 +32,7 @@ class LutronIntegration {
       log: ctx.log.child('telnet'),
       getController: () => this.controller,
     });
+    this.feedback = new ZoneFeedback({ getController: () => this.controller });
     this.router = createRoutes(this);
   }
 
@@ -92,11 +95,13 @@ class LutronIntegration {
       this.log.info(`Ready — ${controller.zones.size} zones, ${controller.buttonGroups.size} keypads, `
         + `${controller.virtualButtons.size} scenes, ${controller.thermostats.size} thermostats`);
       this.telnet.sendInitialState();
+      this.feedback.resyncAll();
       connectionChanged();
     });
 
     controller.on('zoneUpdate', ({ zone }) => {
       this.telnet.zoneChanged(zone);
+      this.feedback.zoneChanged(zone.id);
       broadcast('zoneUpdate', { zone });
     });
     controller.on('ledUpdate', (e) => {
@@ -154,6 +159,7 @@ class LutronIntegration {
       ...this.connectionState(),
       bridgePort: this.telnet.port,
       webPort: Number(process.env.SPLYCEDBOARD_WEB_PORT) || 47200,
+      feedbackFrom: this.feedback.activeHosts(),
     };
   }
 

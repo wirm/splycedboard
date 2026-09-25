@@ -73,6 +73,25 @@ configuration.
    SplycedBoard on the Pro Host.
 3. No username or password is needed; SplycedBoard handles authentication with the processor.
 
+### Feedback: levels changed outside Savant
+
+Savant shows each load's level wherever it was changed: in Savant, at a keypad, in the Lutron
+app, by a scene, or on SplycedBoard's dashboard. This needs profile 1.13 or later.
+
+- **How it works.** HTTP can't push, so the profile asks SplycedBoard twice a second what
+  changed.
+- **Where levels go.** Each level is written into the state the data table row shows, such
+  as `DimmerLevel_486`.
+- **At startup.** Savant asks for each load's level once when it starts, and SplycedBoard
+  resends every level every ten minutes.
+- **Checking it.** The **Savant feedback** chip on the Setup tab shows which Savant host is
+  asking. "not polling" means Savant is still running an older profile: update the
+  component to 1.13 or later and upload the configuration.
+- **What's covered.** Dimmer, Switch, Variable Shade and Shade rows, and the brightness of
+  Color Slider rows.
+- **Not yet covered.** Keypad LEDs, and the color or color temperature of Ketra and Rania
+  loads (DMX and CCT Slider rows).
+
 ### Lighting data table
 
 **Address1 = LEAP Zone ID.** Every zone's ID is shown on the **Loads** tab. They're stable
@@ -172,7 +191,8 @@ keep working unchanged.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/lutron/zone/query?id=` | `{ "level": n }`, polled by QueryDimmerLevel every 5 s |
+| `GET /api/lutron/feedback` | The levels that changed since this Savant host last asked, 32 at a time: `{"z0":"486","l0":55, …}`, or `{}`. PollFeedback asks twice a second (from 1.13) |
+| `GET /api/lutron/zone/query?id=` | `{ "zone": "486", "level": 55 }`, asked once per load when Savant starts (QueryDimmerLevel) |
 | `GET /api/lutron/zone/level?id=&level=` | Set a zone (0–100) |
 | `GET /api/lutron/zone/raise\|lower\|stop?id=` | Raise / lower / stop |
 | `GET /api/lutron/area/level?id=&level=` | Set every load in an area |
@@ -250,6 +270,9 @@ responses on the dashboard's **Logs** page (filter: Lutron LEAP).
 3. On the Logs page, turn on **Verbose logging** in Settings and trigger a command from Savant.
    You should see `→ setLevel zone …` lines.
 4. Address1 in the data table must match the zone ID on the Loads tab.
+5. For levels changed outside Savant, the **Savant feedback** chip on the Setup tab should
+   show the Pro Host's address. If it says "not polling", Savant runs a profile older than
+   1.13: update the component and upload the configuration.
 
 **Certificates missing.** The pairing record exists but its certificate files don't (for
 example, the `data/` folder was partly copied). Pair again from the Setup tab.

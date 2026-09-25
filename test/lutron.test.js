@@ -1,7 +1,7 @@
 /**
  * Lutron integration end-to-end against the mock LEAP processor: inventory loading,
- * the Savant profile's HTTP endpoints (new and legacy paths), the telnet bridge,
- * WebSocket events, and switching the integration off and on.
+ * the Savant profile's HTTP endpoints (new and legacy paths) and feedback, the telnet
+ * bridge, WebSocket events, and switching the integration off and on.
  */
 const h = require('./support/harness');
 const { test, before, after } = require('node:test');
@@ -60,14 +60,34 @@ test('hub reports Lutron as connected', async () => {
   assert.match(lutron.status.text, /Mock QSX.*7 zones/);
 });
 
-test('QueryDimmerLevel answers on both the new and the legacy path', async () => {
+test('QueryDimmerLevel answers on both the new and the legacy path, naming the zone', async () => {
   for (const url of ['/api/lutron/zone/query?id=101', '/api/zone/query?id=101']) {
     const { status, json } = await hub.get(url);
     assert.equal(status, 200, url);
-    assert.deepEqual(json, { level: 75 }, url);
+    assert.deepEqual(json, { zone: '101', level: 75 }, url);
   }
   assert.equal((await hub.get('/api/zone/query?id=999')).status, 404);
   assert.equal((await hub.get('/api/zone/query')).status, 400);
+});
+
+test('feedback: Savant gets every level when it starts asking, then changes made anywhere', async () => {
+  const levelsIn = (answer) => Object.fromEntries(Object.keys(answer)
+    .filter((k) => k.startsWith('z'))
+    .map((k) => [answer[k], answer[`l${k.slice(1)}`]]));
+  const poll = async () => (await hub.get('/api/lutron/feedback')).json;
+
+  const first = await poll();
+  assert.deepEqual(Object.keys(levelsIn(first)).sort(), ['101', '102', '201', '202', '203', '301'], 'every zone but the thermostat');
+  assert.equal(levelsIn(first)[101], 75);
+  assert.deepEqual(await poll(), {});
+
+  // A keypad dims the kitchen: the processor tells SplycedBoard, nobody asked for it
+  mock.state.zones.find((z) => z.id === 101).level = 20;
+  mock.push({ ZoneStatus: { Zone: { href: '/zone/101' }, Level: 20 } });
+  const next = await h.waitFor(async () => { const a = await poll(); return Object.keys(a).length && a; }, { what: 'feedback' });
+  assert.deepEqual(levelsIn(next), { 101: 20 });
+
+  assert.deepEqual((await hub.get('/api/lutron/status')).json.feedbackFrom, ['127.0.0.1'], 'the dashboard sees Savant asking');
 });
 
 test('zone, area, shade and scene endpoints drive the processor', async () => {

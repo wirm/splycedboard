@@ -6,10 +6,12 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { manifests } = require('../SplycedBoard/src/integrations');
 const { compareVersions } = require('../SplycedBoard/src/core/profiles');
+const { SLOTS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
 const ROOT = path.join(__dirname, '..');
 const PROFILES = path.join(ROOT, 'SplycedBoard', 'profiles');
@@ -91,5 +93,79 @@ test('a profile that changed since the last release has a higher version', (t) =
     if (!before || before.xml === xml) continue;
     assert.equal(compareVersions(attrs.rpm_xml_version, before.version), 1,
       `${file} changed since ${tag} but its rpm_xml_version is still ${attrs.rpm_xml_version} (was ${before.version}): bump it and add a Change Log line`);
+  }
+});
+
+// Savant runs an entity's query_status_with_action only where its schema puts it, after the
+// representations, and passes the action only the addresses named in with_arg. The Lutron
+// profile up to 1.12 had its polling first, with no address: Savant never asked for a level.
+test('entities ask for their state after their representations, passing the address', () => {
+  for (const file of files) {
+    const xml = fs.readFileSync(path.join(PROFILES, file), 'utf8');
+    for (const [, name, body] of xml.matchAll(/<entity name="([^"]+)"[^>]*>([\s\S]*?)<\/entity>/g)) {
+      const representations = [...body.matchAll(/<\/\w+_representation>/g)].map((m) => m.index);
+      for (const query of body.matchAll(/<query_status_with_action\b[^>]*>([\s\S]*?)<\/query_status_with_action>/g)) {
+        assert.ok(query.index > Math.max(...representations), `${file}: "${name}" asks before its representations`);
+        assert.match(query[1], /<with_arg name="\w+" address_component="\d+"/, `${file}: "${name}" asks without passing its address`);
+      }
+    }
+  }
+});
+
+// SplycedBoard answers the Lutron profile's PollFeedback in SLOTS slots (lutron/feedback.js),
+// and the profile's ZoneFeedback status message writes each into two states: a slot one side
+// has and the other doesn't would lose levels, or write old ones.
+test('the Lutron profile reads every feedback slot SplycedBoard sends', () => {
+  const xml = fs.readFileSync(path.join(PROFILES, 'lutron_leap bridge.xml'), 'utf8');
+  const message = xml.match(/<status_message name="ZoneFeedback">([\s\S]*?)<\/status_message>/)?.[1];
+  assert.ok(message, 'no ZoneFeedback status message');
+  const all = Array.from({ length: SLOTS }, (_, i) => i);
+  const slots = (re) => [...message.matchAll(re)].map((m) => Number(m[1]));
+  assert.deepEqual(slots(/<values path="\/none\/z(\d+)"/g), all, 'zone slots');
+  assert.deepEqual(slots(/<values path="\/none\/l(\d+)"/g), all, 'level slots');
+  for (const state of ['DimmerLevel', 'ColorLevel']) {
+    const writes = [...message.matchAll(new RegExp(`<update_state_variable name="${state}_\\*"[^>]*wildcard_source_name="FeedbackZone(\\d+)">FeedbackLevel(\\d+)<`, 'g'))];
+    assert.deepEqual(writes.map((m) => Number(m[1])), all, state);
+    assert.ok(writes.every((m) => m[1] === m[2]), `${state}: each slot's zone gets its own level`);
+  }
+  assert.match(xml, /<action name="PollFeedback">[\s\S]*?>api\/lutron\/feedback</, 'PollFeedback asks the wrong path');
+});
+
+// Blueprint's own schema, where Blueprint is installed (not on CI). Savant passes over what it
+// doesn't expect without a word, which is how the misplaced polling above went unnoticed.
+function blueprintSchema() {
+  const base = path.join(os.homedir(), 'Library', 'Application Support', 'Savant');
+  let dirs;
+  try {
+    dirs = fs.readdirSync(base);
+  } catch {
+    return null;
+  }
+  return dirs
+    .filter((d) => d.startsWith('.SavantOS'))
+    .map((d) => path.join(base, d, 'RPMInstallLink/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/racepoint_component_profile.xsd'))
+    .filter((f) => fs.existsSync(f))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0] || null;
+}
+
+// What the schema asks for that Savant's own profiles leave out as well, and one untested
+// addition of ours: the Lutron thermostat state variables name their ThermostatID (1.11).
+const TOLERATED = [
+  /The attribute 'state_center_type' is required but missing/,
+  /Element 'state_variable', attribute 'unique_identifier': The attribute 'unique_identifier' is not allowed/,
+];
+
+test("profiles validate against Blueprint's schema", (t) => {
+  const xsd = blueprintSchema();
+  if (!xsd) return t.skip('Blueprint is not installed here');
+  for (const file of files) {
+    let out = '';
+    try {
+      execFileSync('xmllint', ['--noout', '--schema', xsd, path.join(PROFILES, file)], { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      out = String(err.stderr);
+    }
+    const errors = out.split('\n').filter((line) => /validity error/.test(line) && !TOLERATED.some((re) => re.test(line)));
+    assert.deepEqual(errors, [], file);
   }
 });

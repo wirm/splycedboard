@@ -2,7 +2,8 @@
  * Lutron HTTP API — mounted at /api/lutron (and at /api for profiles ≤ v1.11).
  *
  * Savant profile endpoints (GET + query string, called by the Lutron LEAP Bridge profile):
- *   zone/query?id                     → { level }   (QueryDimmerLevel polling)
+ *   feedback                          → the levels that changed (feedback.js), polled twice a second
+ *   zone/query?id                     → { zone, level }   (QueryDimmerLevel, when Savant starts)
  *   zone/level?id&level[&fade]         zone/raise|lower|stop?id
  *   area/level?id&level[&fade]
  *   shade/level?id&level[&delay]       shade/raise|lower|stop?id
@@ -45,6 +46,8 @@ function num(value, name) {
   return n;
 }
 
+const clientAddress = (req) => String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+
 function createRoutes(lutron) {
   const router = express.Router();
   const log = lutron.log;
@@ -84,8 +87,7 @@ function createRoutes(lutron) {
     log.info(`Scanning for processors (${timeout}ms)...`);
     // The dashboard's own address is a host certainly on the network: it helps tell "found
     // nothing" apart from "not allowed onto the network".
-    const client = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-    return discoverProcessors(timeout, { log: log.child('discovery'), client });
+    return discoverProcessors(timeout, { log: log.child('discovery'), client: clientAddress(req) });
   }));
 
   router.post('/pair', handle(async (req) => {
@@ -277,12 +279,17 @@ function createRoutes(lutron) {
 
   // ── Savant profile: zones, areas, shades ───────────────────────────────────
 
-  // Polled by Savant every few seconds per load — keep it cheap and quiet.
+  // Polled by the profile twice a second, per Savant host: keep it cheap and quiet. Without a
+  // processor there's simply nothing new ({}), rather than an error every half second.
+  router.get('/feedback', (req, res) => res.json(lutron.feedback.poll(clientAddress(req))));
+
+  // Asked once per load when Savant starts. The zone comes back too, so the profile knows
+  // whose level it is (DimmerLevel_<zone>).
   router.get('/zone/query', withController((c, req) => {
     const id = int(req.query.id, 'id');
     const zone = c.zones.get(id);
     if (!zone) throw httpError(404, `Zone ${id} not found`);
-    return { level: Math.round(zone.level ?? 0) };
+    return { zone: String(id), level: Math.round(zone.level ?? 0) };
   }));
 
   router.get('/zone/level', withController((c, req) => (

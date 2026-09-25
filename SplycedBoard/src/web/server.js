@@ -24,6 +24,11 @@ const WEB_PORT = Number(process.env.SPLYCEDBOARD_WEB_PORT) || 47200;
 
 const clientIp = (req) => String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 
+// The dashboard marks its requests; browsers also add Origin/Referer, and Sec-Fetch-Mode where
+// the page is on https or localhost. Savant's HTTP client sends none of these.
+const fromDashboard = (req) => Boolean(req.headers['x-splycedboard-dashboard'] || req.headers['sec-fetch-mode']
+  || req.headers.origin || req.headers.referer);
+
 function lanAddresses() {
   const out = [];
   for (const addrs of Object.values(os.networkInterfaces())) {
@@ -50,6 +55,23 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
   for (const { id } of hub.list()) {
     app.use(`/ui/${id}`, express.static(path.join(paths.INTEGRATIONS_DIR, id, 'ui')));
   }
+
+  // ── Requests from Savant that fail ─────────────────────────────────────────
+  // A profile calling a path that doesn't exist, or a report being refused, would otherwise
+  // go unnoticed. Logged once per caller and path every 10 minutes.
+  const rejectedLogged = new Map();
+  app.use('/api', (req, res, next) => {
+    if (!fromDashboard(req)) {
+      res.on('finish', () => {
+        if (res.statusCode < 400 || res.statusCode === 503) return; // 503: integration switched off, shown elsewhere
+        const key = `${clientIp(req)} ${req.method} ${req.originalUrl.split('?')[0]} ${res.statusCode}`;
+        if (Date.now() - (rejectedLogged.get(key) || 0) < 10 * 60 * 1000) return;
+        rejectedLogged.set(key, Date.now());
+        log.warn(`${clientIp(req)} called ${req.method} ${req.originalUrl} and got HTTP ${res.statusCode}`);
+      });
+    }
+    next();
+  });
 
   // ── Hub API ────────────────────────────────────────────────────────────────
   const api = express.Router();
@@ -82,7 +104,9 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
       return res.status(404).json({ error: `No integration "${integration}" with a Savant profile` });
     }
     if (!/^\d+(\.\d+)*$/.test(version)) return res.status(400).json({ error: 'version (like 1.12) required' });
-    const state = hub.profiles.report(integration, String(req.query.device || '') || clientIp(req), version);
+    const device = String(req.query.device || '') || clientIp(req);
+    const state = hub.profiles.report(integration, device, version);
+    log.debug(`${device} reports ${integration} profile ${version} (${state})`);
     res.json({ ok: true, state, shipped: hub.profiles.summary(integration).version });
   });
 
@@ -156,10 +180,10 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
   // `fallthrough` is only used by the legacy root mount, where unmatched paths
   // must reach the final 404 rather than stop here.
   const integrationApi = (id, { fallthrough = false } = {}) => (req, res, next) => {
-    // Savant calling the integration (browsers send Sec-Fetch-Mode, Savant doesn't): lets the
-    // hub notice a profile too old to report its version. Keyed like the profile's reports:
-    // by the Apple TV address in ?ip=, else by the calling host.
-    if (!req.headers['sec-fetch-mode']) {
+    // Savant calling the integration: lets the hub notice a profile too old to report its
+    // version. Keyed like the profile's reports: by the Apple TV address in ?ip=, else by the
+    // calling host.
+    if (!fromDashboard(req)) {
       res.on('finish', () => {
         if (res.statusCode < 400) hub.profiles.traffic(id, String(req.query.ip || '') || clientIp(req));
       });

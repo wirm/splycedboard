@@ -82,6 +82,13 @@ Then it:
 When it's done, open the dashboard at **http://localhost:47200** (or `http://<pro-host-ip>:47200`
 from another device).
 
+> **macOS 15 and later: allow local network access.** The first time SplycedBoard reaches
+> for a device on the network, such as a scan for a Lutron processor or an Apple TV, macOS
+> asks on the Pro Host's screen whether **bun** may find and connect to devices on the local
+> network. Click **Allow**. If the question was missed or declined, switch **bun** (or
+> **node**) on under **System Settings → Privacy & Security → Local Network**. Without it,
+> scans find nothing, and pairing and connections fail with "No route to host".
+
 > **Why a link on the Desktop instead of a folder?** macOS doesn't let background services read
 > from `~/Desktop` without a Full Disk Access grant, and a service without that grant can fail
 > silently after a reboot. So the real files live in Application Support, and the Desktop
@@ -159,10 +166,15 @@ integration's Overview card when they differ.
 - **Older in Savant**: add the new profile to Blueprint's library, update the component
   in the configuration, and upload it to the host.
 - **Newer in Savant**: update SplycedBoard.
-- **Doesn't report**: Savant is calling the integration, but hasn't reported a version for two
-  minutes. The profile predates version reporting, so it's older: update it as above.
+- **Older than 1.12 (or 1.2)**: Savant kept calling the integration for two minutes without
+  reporting a version. The profile predates version reporting, so it's older: update it as
+  above.
 
 **Settings → Savant profiles** lists each component Savant reported, and the version it runs.
+Nothing listed means nothing has reached SplycedBoard from Savant yet. Check that the
+configuration with the component is running on the host, and that the component's address is
+`127.0.0.1`, port `47200`. With **Verbose logging** on, the Logs page shows each report as it
+arrives. Requests from Savant that fail are logged too, verbose or not.
 
 ---
 

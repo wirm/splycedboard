@@ -30,7 +30,8 @@ const SB = (() => {
   async function api(method, url, body) {
     const res = await fetch(url, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      // Marks the dashboard's own requests, so the server doesn't take them for Savant's.
+      headers: { 'X-SplycedBoard-Dashboard': '1', ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const text = await res.text();
@@ -410,7 +411,7 @@ const SB = (() => {
       current: `${s.version} ✓`,
       older: `${s.version}, older`,
       newer: `${s.version}, newer`,
-      unreported: 'an older version',
+      unreported: `older than ${p.version}`,
       pending: 'waiting for its report',
     }[s.state] || s.state);
     const warn = sources.some((s) => ['older', 'newer', 'unreported'].includes(s.state));

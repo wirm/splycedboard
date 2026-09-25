@@ -130,6 +130,10 @@ curl 'http://127.0.0.1:47200/api/appletv/cmd?ip=192.168.1.50&cmd=home'
 **Not listed when adding.** The scan uses multicast (Bonjour), which VLANs and managed switches
 often block. Type the IP instead; SplycedBoard asks that address directly.
 
+**Nothing works, and the log shows "No route to host".** On macOS 15 and later, SplycedBoard
+needs permission to reach local devices. On the Pro Host, open **System Settings → Privacy &
+Security → Local Network** and switch on **bun** (or **node**).
+
 **"Couldn't reach an Apple TV at …".** Check the IP. From the Pro Host, `nc -zv <ip> 49153`
 should connect. Make sure the Apple TV is on (not unplugged) and on the network.
 

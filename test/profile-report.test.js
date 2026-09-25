@@ -65,11 +65,23 @@ test('Savant calling without reporting is an older profile, once it has had time
   advance(GRACE_MS);
   profiles.traffic('lutron', '127.0.0.1');
   assert.equal(profiles.summary('lutron').sources[0].state, 'unreported');
-  assert.match(profiles.summary('lutron').warning, /older version of this profile \(127\.0\.0\.1\) that doesn't report its version/);
+  assert.match(profiles.summary('lutron').warning, /older than 1\.12 \(127\.0\.0\.1\), from before profiles reported their version/);
 
   profiles.report('lutron', '127.0.0.1', '1.12'); // the new profile is in
   assert.equal(profiles.summary('lutron').sources[0].state, 'current');
   assert.equal(profiles.summary('lutron').warning, null);
+});
+
+test('a single call, with nothing after it, is never taken for an old profile', () => {
+  const { profiles, advance } = tracker();
+  profiles.traffic('lutron', '192.168.5.20'); // someone trying the API once
+  advance(GRACE_MS + 1);
+  profiles.refresh();
+  assert.equal(profiles.summary('lutron').sources[0].state, 'pending');
+  assert.equal(profiles.summary('lutron').warning, null);
+  advance(ACTIVE_MS);
+  profiles.refresh();
+  assert.deepEqual(profiles.summary('lutron').sources, []);
 });
 
 test("a profile that can't report is never flagged for not reporting", () => {
@@ -103,10 +115,11 @@ let hub;
 before(async () => { hub = await h.startHub(); });
 after(() => hub.stop());
 
-// Savant's HTTP client, unlike a browser (or Node's fetch), sends no Sec-Fetch-Mode.
-function savantGet(url) {
+// A plain GET with only the headers given: Savant's HTTP client sends none of the ones
+// browsers add (Origin, Referer, Sec-Fetch-Mode), nor the dashboard's own marker.
+function rawGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    http.get(hub.base + url, (res) => {
+    http.get(hub.base + url, { headers }, (res) => {
       res.resume();
       res.on('end', () => resolve(res.statusCode));
     }).on('error', reject);
@@ -116,11 +129,24 @@ function savantGet(url) {
 const lutronProfile = async () => (await hub.get('/api/hub')).json.integrations.find((i) => i.id === 'lutron').profileStatus;
 
 test("Savant's calls to an integration count toward spotting an old profile; the dashboard's don't", async () => {
-  assert.equal((await hub.get('/api/status')).status, 200); // a browser: not Savant
+  // The dashboard, however it's reached: over plain http from another machine, browsers
+  // send no Sec-Fetch-Mode, but the dashboard's marker, Origin or Referer give it away.
+  assert.equal((await hub.get('/api/status')).status, 200);
+  assert.equal(await rawGet('/api/status', { 'X-SplycedBoard-Dashboard': '1' }), 200);
+  assert.equal(await rawGet('/api/status', { Referer: `${hub.base}/` }), 200);
+  assert.equal(await rawGet('/api/status', { Origin: hub.base }), 200);
   assert.deepEqual((await lutronProfile()).sources, []);
 
-  assert.equal(await savantGet('/api/status'), 200); // the Lutron profile's own path
+  assert.equal(await rawGet('/api/status'), 200); // Savant, on the Lutron profile's own path
   assert.deepEqual((await lutronProfile()).sources.map((s) => [s.device, s.state]), [['127.0.0.1', 'pending']]);
+});
+
+test("Savant's calls that fail are logged, so a wrong path or refused report shows up", async () => {
+  assert.equal(await rawGet('/api/lutron/no-such-thing'), 404);
+  assert.equal((await hub.get('/api/lutron/also-missing')).status, 404); // the dashboard: not logged
+  const { entries } = (await hub.get('/api/hub/logs?limit=1000')).json;
+  const lines = entries.filter((e) => e.tag === 'web' && /got HTTP 404/.test(e.msg)).map((e) => e.msg);
+  assert.deepEqual(lines, ['127.0.0.1 called GET /api/lutron/no-such-thing and got HTTP 404']);
 });
 
 test('the profile reports its version, and the dashboard shows what Savant runs', async () => {

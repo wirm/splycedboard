@@ -9,9 +9,9 @@
  * Comparing that with the profile this copy of SplycedBoard ships (rpm_xml_version in
  * profiles/<file>) shows when Blueprint has an older, or newer, profile than it should.
  *
- * Older profiles can't report. When Savant keeps calling an integration's API and nothing
- * reports, that's an older profile too. It's flagged once Savant has had two minutes to
- * report.
+ * Older profiles can't report. When Savant keeps calling an integration's API for two
+ * minutes and nothing reports, that's an older profile too. A single request (someone
+ * testing with curl) isn't enough.
  *
  * A "source" is one component in Savant's configuration: the device address it reports
  * (each Apple TV), or else the address the requests come from (the Pro Host, for Lutron).
@@ -59,7 +59,6 @@ class ProfileTracker extends EventEmitter {
     super();
     this.log = log;
     this.now = now;
-    this.started = now();
     this.profiles = new Map(); // id → { name, file, version, sources: Map(key → source) }
     this.timer = null;
   }
@@ -147,7 +146,8 @@ class ProfileTracker extends EventEmitter {
       return cmp === 0 ? 'current' : cmp < 0 ? 'older' : 'newer';
     }
     if (source.trafficAt && now - source.trafficAt <= ACTIVE_MS) {
-      return now - Math.max(this.started, source.firstTrafficAt) >= GRACE_MS ? 'unreported' : 'pending';
+      // Calls spread over at least GRACE_MS, with every report due in that time missing.
+      return source.trafficAt - source.firstTrafficAt >= GRACE_MS ? 'unreported' : 'pending';
     }
     return 'inactive';
   }
@@ -162,8 +162,8 @@ class ProfileTracker extends EventEmitter {
       return `Savant is running version ${version} of this profile${where}, newer than the ${profile.version} `
         + 'this SplycedBoard ships. Update SplycedBoard.';
     }
-    return `Savant is running an older version of this profile${where} that doesn't report its version. `
-      + `Add version ${profile.version} in Blueprint and update the configuration.`;
+    return `Savant is running a version of this profile older than ${profile.version}${where}, from before `
+      + `profiles reported their version. Add version ${profile.version} in Blueprint and update the configuration.`;
   }
 
   // Logs each source's state changes once, and tells the dashboard.

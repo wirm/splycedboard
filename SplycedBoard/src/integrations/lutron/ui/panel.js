@@ -85,8 +85,10 @@
     }, 1000);
 
     try {
-      const { processors } = await api('GET', `/discover?timeout=${SCAN_TIMEOUT}`);
-      if (!processors.length) {
+      const { processors, problem } = await api('GET', `/discover?timeout=${SCAN_TIMEOUT}`);
+      if (problem) {
+        list.innerHTML = `<div class="alert alert-error show">${esc(problem)}</div>`;
+      } else if (!processors.length) {
         list.innerHTML = '<div style="font-size:13px; color:var(--muted); padding:12px">No processors found. Try manual entry, or check that LEAP is enabled.</div>';
       } else {
         list.innerHTML = `<div class="processor-list">${processors.map((p, i) => `

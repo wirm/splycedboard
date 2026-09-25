@@ -166,8 +166,16 @@ feedback.
 
 ## Troubleshooting
 
-**Processor not found by the scan.** mDNS is often blocked by VLANs, managed switches or
-firewalls. Use **Manual Entry**, and check the processor answers `ping`.
+**Processor not found by the scan.** The scan asks for Lutron's mDNS (Bonjour) announcements.
+When that finds nothing, it checks every address on the Pro Host's own /24 for the two LEAP
+ports (8083 and 8081). mDNS can be blocked by VLANs, managed switches or firewalls, and the
+direct check only covers the host's own subnet. Otherwise, use **Manual Entry**, and check the
+processor answers `ping`.
+
+**"macOS isn't letting SplycedBoard reach devices on the local network."** macOS 15 and
+later ask before a program talks to local devices. On the Pro Host, open **System Settings →
+Privacy & Security → Local Network** and switch on **bun** (or **node**), then scan again.
+Until then, pairing and the LEAP connection fail too, typically with "No route to host".
 
 **Pairing times out or fails with "Connection error".**
 - LEAP must be enabled (and on some QSX firmware, licensed) in HomeWorks Designer.

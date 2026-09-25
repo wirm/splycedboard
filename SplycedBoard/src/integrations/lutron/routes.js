@@ -80,7 +80,10 @@ function createRoutes(lutron) {
   router.get('/discover', handle(async (req) => {
     const timeout = parseInt(req.query.timeout, 10) || 8000;
     log.info(`Scanning for processors (${timeout}ms)...`);
-    return { processors: await discoverProcessors(timeout, { log: log.child('discovery') }) };
+    // The dashboard's own address is a host certainly on the network: it helps tell "found
+    // nothing" apart from "not allowed onto the network".
+    const client = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+    return discoverProcessors(timeout, { log: log.child('discovery'), client });
   }));
 
   router.post('/pair', handle(async (req) => {

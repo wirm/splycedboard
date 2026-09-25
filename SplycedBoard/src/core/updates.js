@@ -31,6 +31,7 @@ const UPDATE_LABEL = 'com.splycedboard.update';
 const FIRST_CHECK_MS = 60 * 1000;
 const CHECK_EVERY_MS = 12 * 60 * 60 * 1000;
 const API_TIMEOUT_MS = 20 * 1000;
+const RECHECK_MS = 30 * 1000; // a check this recent answers "Check now" again, without asking GitHub
 const DOWNLOAD_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 const WATCH_EVERY_MS = 2000;
@@ -75,6 +76,12 @@ function launchdLauncher({ installer, cwd, env, logFile, resultFile, label = UPD
   if (r.status !== 0) throw new Error(`launchd wouldn't start the installer: ${(r.stderr || '').trim() || `exit ${r.status}`}`);
 }
 
+/** GitHub's refusal, and how long until it takes checks again. */
+function limitedMessage(retryAt, now) {
+  const minutes = Math.max(1, Math.ceil((Date.parse(retryAt) - now) / 60000));
+  return `GitHub takes 60 update checks an hour from one network, and this one has used them. It takes them again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+}
+
 class Updater extends EventEmitter {
   /**
    * @param version   the running version
@@ -82,8 +89,9 @@ class Updater extends EventEmitter {
    * @param managed   running as the launchd service: only then can it install
    * @param launch    how to run the installer (tests replace launchdLauncher)
    */
-  constructor({ version, repo, dataDir, logDir = null, managed = false, log = null, apiBase, launch = launchdLauncher, watchEveryMs = WATCH_EVERY_MS }) {
+  constructor({ version, repo, dataDir, logDir = null, managed = false, log = null, apiBase, launch = launchdLauncher, watchEveryMs = WATCH_EVERY_MS, now = Date.now }) {
     super();
+    this.now = now;
     this.repo = repo;
     this.log = log;
     this.apiBase = apiBase || process.env.SPLYCEDBOARD_UPDATE_API || 'https://api.github.com';
@@ -105,6 +113,7 @@ class Updater extends EventEmitter {
       latest: null,     // { version, tag, name, url, publishedAt, asset: { url, size, digest } }
       available: false,
       error: null,
+      retryAt: null,    // when GitHub takes checks again, after limiting this network
       installing: null, // { version, startedAt }
       result: null,     // { ok, version, message, at }: how the last update went
     };
@@ -135,6 +144,14 @@ class Updater extends EventEmitter {
 
   async _check() {
     if (!this.repo) throw httpError(500, "package.json doesn't name a GitHub repository to update from");
+    const now = this.now();
+    // GitHub takes 60 unauthenticated checks an hour from one network. Once it has said no,
+    // asking again before it said to only wastes the click.
+    if (this.state.retryAt && Date.parse(this.state.retryAt) > now) {
+      throw httpError(429, `Couldn't check for updates: ${limitedMessage(this.state.retryAt, now)}`);
+    }
+    // "Check now" moments after a check: that answer stands (and a few clicks can't use up the hour)
+    if (this.state.latest && !this.state.error && now - Date.parse(this.state.checkedAt) < RECHECK_MS) return this.status();
     this._set({ checking: true });
     try {
       const res = await fetch(`${this.apiBase}/repos/${this.repo}/releases/latest`, {
@@ -142,7 +159,13 @@ class Updater extends EventEmitter {
         signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       if (res.status === 404) throw new Error(`${this.repo} has no published releases`);
-      if (res.status === 403 || res.status === 429) throw new Error('GitHub is limiting requests from this network; try again later');
+      if (res.status === 403 || res.status === 429) {
+        const reset = Number(res.headers.get('x-ratelimit-reset')) * 1000;
+        const after = Number(res.headers.get('retry-after')) * 1000;
+        const retryAt = new Date(reset > now ? reset : now + (after || 10 * 60 * 1000)).toISOString();
+        this._set({ retryAt });
+        throw Object.assign(new Error(limitedMessage(retryAt, now)), { status: 429 });
+      }
       if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}`);
       const release = await res.json();
       const asset = (release.assets || []).find((a) => a.name === ASSET);
@@ -159,10 +182,10 @@ class Updater extends EventEmitter {
       if (available && this.state.latest?.version !== version) {
         this.log?.info(`SplycedBoard v${version} is available (this is v${this.state.current})`);
       }
-      this._set({ checking: false, checkedAt: new Date().toISOString(), latest, available, error: null });
+      this._set({ checking: false, checkedAt: new Date(now).toISOString(), latest, available, error: null, retryAt: null });
     } catch (err) {
       const reason = err.name === 'TimeoutError' ? "GitHub didn't answer in time" : err.message;
-      this._set({ checking: false, checkedAt: new Date().toISOString(), error: `Couldn't check for updates: ${reason}` });
+      this._set({ checking: false, checkedAt: new Date(now).toISOString(), error: `Couldn't check for updates: ${reason}` });
       this.log?.warn(this.state.error);
       throw httpError(err.status || 502, this.state.error);
     }

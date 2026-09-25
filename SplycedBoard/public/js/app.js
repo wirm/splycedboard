@@ -423,6 +423,9 @@ const SB = (() => {
 
   let updateLogTimer = null;
 
+  /** When GitHub takes update checks again, if it's refusing them now. */
+  const limitedUntil = (u) => (u.retryAt && Date.parse(u.retryAt) > Date.now() ? new Date(u.retryAt) : null);
+
   function renderUpdate() {
     const u = update;
     if (!u) return;
@@ -444,6 +447,8 @@ const SB = (() => {
       if (!u.canInstall) desc += '. Only the background service can install it; this copy runs in a terminal.';
     } else if (u.checking) {
       desc = 'Checking GitHub…';
+    } else if (limitedUntil(u)) {
+      desc = `GitHub takes 60 update checks an hour from one network, and this one has used them. Checks work again at ${esc(limitedUntil(u).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}.`;
     } else if (u.error) {
       desc = esc(u.error);
     } else if (latest) {
@@ -459,7 +464,10 @@ const SB = (() => {
     install.hidden = !u.available || Boolean(u.installing);
     install.disabled = !u.canInstall;
     if (u.available) install.textContent = `Update to v${latest.version}`;
-    $('updateCheckBtn').disabled = u.checking || Boolean(u.installing);
+    $('updateCheckBtn').disabled = u.checking || Boolean(u.installing) || Boolean(limitedUntil(u));
+    // Back on once GitHub takes checks again
+    clearTimeout(renderUpdate.limitTimer);
+    if (limitedUntil(u)) renderUpdate.limitTimer = setTimeout(renderUpdate, limitedUntil(u) - Date.now() + 1000);
 
     const result = $('updateResult');
     result.hidden = !u.result || Boolean(u.installing);

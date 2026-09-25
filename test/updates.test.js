@@ -28,13 +28,19 @@ function fakePackage(version, installScript) {
 }
 
 // GitHub: the releases API, and a download that redirects to the file, as github.com does.
-const github = { release: null, archive: null, digest: undefined };
+const github = { release: null, archive: null, digest: undefined, limitedUntil: 0, apiCalls: 0 };
 let server;
 let base;
 
 before(async () => {
   server = http.createServer((req, res) => {
     if (req.url === '/repos/wirm/splycedboard/releases/latest') {
+      github.apiCalls++;
+      if (github.limitedUntil) {
+        // As GitHub refuses a network over its 60 an hour: the time it takes checks again
+        res.writeHead(403, { 'content-type': 'application/json', 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(github.limitedUntil) });
+        return res.end('{"message":"API rate limit exceeded"}');
+      }
       if (!github.release) {
         res.writeHead(404, { 'content-type': 'application/json' });
         return res.end('{"message":"Not Found"}');
@@ -75,9 +81,9 @@ function release(version, installScript = 'exit 0', packageVersion = version) {
   github.archive = fakePackage(packageVersion, installScript);
 }
 
-function updater({ version = '2.0.0', managed = true, launch } = {}) {
+function updater({ version = '2.0.0', managed = true, launch, now } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-update-'));
-  return new Updater({ version, repo: 'wirm/splycedboard', dataDir, managed, apiBase: base, launch, watchEveryMs: 50 });
+  return new Updater({ version, repo: 'wirm/splycedboard', dataDir, managed, apiBase: base, launch, watchEveryMs: 50, now });
 }
 
 // Runs the installer as launchdLauncher's job does, minus launchd.
@@ -125,6 +131,41 @@ test('check() reports trouble reaching GitHub', async () => {
   const u = updater();
   await assert.rejects(u.check(), (err) => err.status === 502 && /no published releases/.test(err.message));
   assert.match(u.status().error, /^Couldn't check for updates/);
+});
+
+test("GitHub's limit: no more asking until the time it gives, which the dashboard shows", async () => {
+  release('2.1.0');
+  const clock = { t: Date.parse('2026-09-25T23:13:42Z') };
+  github.limitedUntil = (clock.t + 9 * 60 * 1000) / 1000; // 9 minutes on
+  github.apiCalls = 0;
+  const u = updater({ now: () => clock.t });
+  try {
+    await assert.rejects(u.check(), (err) => err.status === 429 && /60 update checks an hour.*again in 9 minutes/.test(err.message));
+    assert.equal(u.status().retryAt, new Date(github.limitedUntil * 1000).toISOString());
+    for (let i = 0; i < 5; i++) await assert.rejects(u.check(), /again in 9 minutes/); // clicks while refused
+    assert.equal(github.apiCalls, 1, 'no more asking before then');
+
+    clock.t += 9 * 60 * 1000 + 1000;
+    github.limitedUntil = 0;
+    const s = await u.check();
+    assert.deepEqual([s.latest.version, s.retryAt, s.error, github.apiCalls], ['2.1.0', null, null, 2]);
+  } finally {
+    github.limitedUntil = 0;
+  }
+});
+
+test('"Check now" just after a check reuses its answer; after 30 seconds it asks again', async () => {
+  release('2.1.0');
+  const clock = { t: Date.parse('2026-09-25T23:00:00Z') };
+  github.apiCalls = 0;
+  const u = updater({ now: () => clock.t });
+  await u.check();
+  clock.t += 10 * 1000;
+  await u.check();
+  assert.equal(github.apiCalls, 1);
+  clock.t += 25 * 1000;
+  await u.check();
+  assert.equal(github.apiCalls, 2);
 });
 
 test('only the background service installs, and only something newer', async () => {

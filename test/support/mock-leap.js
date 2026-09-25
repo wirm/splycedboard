@@ -279,11 +279,14 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
     return 404;
   }
 
+  // As a QSX answers: no subscription to every button or LED at once, one per button and LED
   function subscribe(url) {
     if (url === '/button/status') return 404;
-    if (url === '/led/status') return 400; // QSX: "This request is not supported"
-    const m = url.match(/^\/led\/(\d+)\/status$/);
+    if (url === '/button/status/event' || url === '/led/status') return 400; // "This request is not supported"
+    let m = url.match(/^\/led\/(\d+)\/status$/);
     if (m) return ledStatus(Number(m[1])) || 404;
+    m = url.match(/^\/button\/(\d+)\/status\/event$/);
+    if (m) return buttonById(Number(m[1])) ? 204 : 404;
     return 200;
   }
 
@@ -297,10 +300,10 @@ function startMockProcessor({ port = 0, host = '127.0.0.1' } = {}) {
     else if (type === 'CreateRequest') result = command(url, body);
     else result = 400;
 
-    if (type === 'SubscribeRequest' && (result === 200 || typeof result === 'object')) socket.subscribed = true;
+    if (type === 'SubscribeRequest' && (result === 200 || result === 204 || typeof result === 'object')) socket.subscribed = true;
 
     const code = typeof result === 'number' ? result : 200;
-    const text = { 200: 'OK', 201: 'Created', 400: 'Bad Request', 404: 'Not Found', 405: 'Method Not Allowed' }[code];
+    const text = { 200: 'OK', 201: 'Created', 204: 'No Content', 400: 'Bad Request', 404: 'Not Found', 405: 'Method Not Allowed' }[code];
     const reply = { CommuniqueType: type.replace('Request', 'Response'), Header: { ClientTag: tag, StatusCode: `${code} ${text}`, Url: url } };
     if (typeof result === 'object') reply.Body = result;
     socket.write(JSON.stringify(reply) + '\r\n');

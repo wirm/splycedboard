@@ -903,7 +903,7 @@
       const label = b.role === 'raise' ? '▲' : b.role === 'lower' ? '▼' : (b.engraving || b.name || `Button ${b.number}`);
       const title = `Button ${b.number ?? b.id}${b.role !== 'button' ? ` (${b.role})` : ''}`;
       return `<button class="kp-key ${cls}${b.ledState === 'On' ? ' is-on' : ''}" type="button" title="${esc(title)}"
-          ${b.ledHref ? `data-led="${esc(b.ledHref)}"` : ''}
+          data-button="${esc(b.href)}" ${b.ledHref ? `data-led="${esc(b.ledHref)}"` : ''}
           onpointerdown="Lutron.pressButton('${esc(b.href)}')" onpointerup="Lutron.releaseButton('${esc(b.href)}')"
           onpointerleave="Lutron.releaseButton('${esc(b.href)}')" onpointercancel="Lutron.releaseButton('${esc(b.href)}')">
           ${b.ledHref ? '<span class="kp-led" aria-hidden="true"></span>' : ''}<span class="kp-label">${esc(label)}</span>
@@ -938,6 +938,20 @@
           <div class="kp-addresses-note">Keypad Button rows: device, button number, LED.</div>
         </details>
       </div>`;
+  }
+
+  // The processor reports a press, from here, Savant or a finger on the keypad: the key lights
+  // while it's held (at least long enough to see).
+  const pressedAt = new Map();
+  function handleButtonEvent(buttonHref, event) {
+    const keys = document.querySelectorAll(`.kp-key[data-button="${CSS.escape(buttonHref || '')}"]`);
+    if (event === 'Press') {
+      pressedAt.set(buttonHref, Date.now());
+      keys.forEach((el) => el.classList.add('is-pressed'));
+    } else if (event === 'Release') {
+      const wait = Math.max(0, 250 - (Date.now() - (pressedAt.get(buttonHref) || 0)));
+      setTimeout(() => keys.forEach((el) => el.classList.remove('is-pressed')), wait);
+    }
   }
 
   function handleLedUpdate(ledHref, state) {
@@ -1302,6 +1316,7 @@
         case 'zoneUpdate': handleZoneUpdate(msg.zone); break;
         case 'thermostatUpdate': handleThermostatUpdate(msg.thermostat); break;
         case 'ledUpdate': handleLedUpdate(msg.ledHref, msg.state); break;
+        case 'buttonEvent': handleButtonEvent(msg.buttonHref, msg.event); break;
         default: break;
       }
     },

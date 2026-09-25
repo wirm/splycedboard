@@ -176,6 +176,8 @@ input[type=range].shade-slider::-webkit-slider-thumb { background: var(--shade);
 }
 .kp-key:hover { border-color: var(--accent); }
 .kp-key:active { transform: translateY(1px); box-shadow: none; background: var(--accent-dim); border-color: var(--accent); }
+/* The processor reported this button pressed, from anywhere */
+.kp-key.is-pressed { background: var(--accent-dim); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .kp-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kp-arrow { font-size: 9px; }
 .kp-blank { visibility: hidden; pointer-events: none; }

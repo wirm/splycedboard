@@ -420,15 +420,27 @@ class LeapController extends EventEmitter {
       this.log.info(`Queried initial state for ${this.thermostats.size} thermostat(s)`);
     }
 
-    // Subscribe to button/LED updates (QSX uses /button/status/event, not /button/status)
-    try {
-      await this.client.subscribe('/button/status');
-      this.log.info('Subscribed to button status');
-    } catch {
+    // Button presses: all at once where the processor allows it; a QSX supports neither of
+    // these, only one subscription per button (/button/:id/status/event).
+    let allButtons = false;
+    for (const url of ['/button/status', '/button/status/event']) {
       try {
-        await this.client.subscribe('/button/status/event');
-        this.log.info('Subscribed to button status events');
-      } catch { /* button subscriptions not available */ }
+        await this.client.subscribe(url);
+        this.log.info(`Subscribed to ${url}`);
+        allButtons = true;
+        break;
+      } catch { /* try the next */ }
+    }
+    if (!allButtons) {
+      const buttons = [...this.buttonGroups.values()].flatMap((bg) => bg.buttons).filter((b) => b.href);
+      let subscribed = 0;
+      await eachLimited(buttons, 8, async (btn) => {
+        try {
+          await this.client.subscribe(`${btn.href}/status/event`);
+          subscribed++;
+        } catch { /* this processor doesn't report presses */ }
+      });
+      if (buttons.length) this.log.info(`Subscribed to presses of ${subscribed} of ${buttons.length} keypad buttons`);
     }
 
     // Keypad LEDs, one by one: QSX has no subscription for all of them (/led/status is "not

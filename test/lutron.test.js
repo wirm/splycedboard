@@ -57,7 +57,9 @@ test('loads the QSX inventory through the per-area fallbacks', async () => {
   ], 'the 4-scene seeTouch keeps its gap above Off, raise/lower at the bottom');
   assert.deepEqual([bedside.deviceName, bedside.family.id, bedside.buttons[1].name], ['Bedside', 'palladiom', 'Button 2']);
   assert.deepEqual(bedside.rows.at(-1), { type: 'pair', lower: 716, raise: 717 });
-  assert.equal(mock.received.filter((r) => r.type === 'SubscribeRequest' && /^\/led\/\d+\/status$/.test(r.url)).length, 8, 'one subscription per LED');
+  const subscribed = (re) => mock.received.filter((r) => r.type === 'SubscribeRequest' && re.test(r.url)).length;
+  assert.equal(subscribed(/^\/led\/\d+\/status$/), 8, 'one subscription per LED');
+  assert.equal(subscribed(/^\/button\/\d+\/status\/event$/), 12, 'and per button, for presses: a QSX has no subscription for all');
 
   assert.equal(inv.virtualButtons.length, 3);
   assert.equal(inv.thermostats.length, 1);
@@ -282,6 +284,12 @@ test('dashboard WebSocket gets integration status and live zone updates', async 
     await hub.get('/api/zone/level?id=101&level=12');
     const update = await h.waitFor(() => messages.find((m) => m.type === 'zoneUpdate' && m.zone.id === 101 && m.zone.level === 12), { what: 'zoneUpdate' });
     assert.equal(update.source, 'lutron');
+
+    // A press, as the processor reports it back: the Keypads tab lights the key
+    await hub.post('/api/lutron/button/press', { href: '/button/702' });
+    await hub.post('/api/lutron/button/release', { href: '/button/702' });
+    await h.waitFor(() => messages.find((m) => m.type === 'buttonEvent' && m.buttonHref === '/button/702' && m.event === 'Release'), { what: 'buttonEvent' });
+    assert.deepEqual(messages.filter((m) => m.type === 'buttonEvent' && m.buttonHref === '/button/702').map((m) => m.event), ['Press', 'Release']);
   } finally {
     ws.close();
   }

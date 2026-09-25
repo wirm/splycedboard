@@ -1,8 +1,8 @@
 /**
  * What Savant on the Pro Host is running.
  *
- *   runningConfig()     zones and components of the configuration uploaded from Blueprint,
- *                       read from zoneConfig.xml in its userConfig.rpmConfig
+ *   runningConfig()     zones, components and their state variables in the configuration
+ *                       uploaded from Blueprint (its userConfig.rpmConfig)
  *   sclibridgeZones()   the zones as Savant lists them (sclibridge userzones)
  *   savantZones()       the first of those that answers
  *   findSclibridge()    where sclibridge is
@@ -12,7 +12,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 
 const SCLIBRIDGE_CANDIDATES = [
   '/Users/Shared/Savant/Applications/RacePointMedia/sclibridge',
@@ -20,8 +20,23 @@ const SCLIBRIDGE_CANDIDATES = [
   '/usr/local/bin/sclibridge',
 ];
 
-const configDir = () => process.env.SPLYCEDBOARD_SAVANT_CONFIG
-  || path.join(os.homedir(), 'Library', 'Application Support', 'RacePointMedia', 'userConfig.rpmConfig');
+// Where Savant keeps the configuration it runs: SavantOS 10 and later under /Users/Shared/Savant;
+// older hosts, and a Mac running Blueprint, in the user's own Library.
+const configDirs = () => (process.env.SPLYCEDBOARD_SAVANT_CONFIG
+  ? [process.env.SPLYCEDBOARD_SAVANT_CONFIG]
+  : [
+    '/Users/Shared/Savant/Library/Application Support/RacePointMedia/userConfig.rpmConfig',
+    path.join(os.homedir(), 'Library', 'Application Support', 'RacePointMedia', 'userConfig.rpmConfig'),
+  ]);
+
+/** A plist as plain data (plutil reads XML and binary plists alike), or null. */
+function readPlist(file) {
+  try {
+    return JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', file], { stdio: ['ignore', 'pipe', 'ignore'] }));
+  } catch {
+    return null;
+  }
+}
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
@@ -38,24 +53,33 @@ function attributes(tag) {
 }
 
 /**
- * The configuration Savant is running: { zones: [name], components: [{ manufacturer, model,
- * name, deviceClass }] }, or null when there's none here (not a Pro Host).
+ * The configuration Savant is running, or null when there's none here (not a Pro Host):
+ *   zones       [name]: its user zones (zoneConfig.xml)
+ *   components  [{ manufacturer, model, name, deviceClass }] (zoneConfig.xml)
+ *   variables   { component name: { state variable: value } }, as Blueprint set them
+ *               (componentStateVariables.plist)
+ * SavantOS 11 keeps zoneConfig.xml to Savant itself (_savant, mode 600). There, zones and
+ * components are empty, and a component is told apart by its variables, which anyone can read.
  */
-function runningConfig({ dir = configDir() } = {}) {
-  let xml;
-  try {
-    xml = fs.readFileSync(path.join(dir, 'zoneConfig.xml'), 'utf8');
-  } catch {
-    return null;
+function runningConfig({ dir } = {}) {
+  for (const d of dir ? [dir] : configDirs()) {
+    let xml = null;
+    try {
+      xml = fs.readFileSync(path.join(d, 'zoneConfig.xml'), 'utf8');
+    } catch { /* missing, or Savant's own */ }
+    const stateVariables = readPlist(path.join(d, 'componentStateVariables.plist'));
+    if (xml == null && !stateVariables) continue;
+    const zones = [...(xml || '').matchAll(/<zone\s([^>]*)>/g)]
+      .map((m) => attributes(m[1]))
+      .filter((z) => z.type === 'user' && z.name)
+      .map((z) => z.name);
+    const components = [...(xml || '').matchAll(/<component\s([^>]*)>/g)]
+      .map((m) => attributes(m[1]))
+      .map((c) => ({ manufacturer: c.manufacturer || '', model: c.model || '', name: c.user_defined_name || '', deviceClass: c.device_class || '' }));
+    const variables = Object.fromEntries(Object.entries(stateVariables || {}).map(([name, v]) => [name, v?.InitialValues || {}]));
+    return { dir: d, zones: [...new Set(zones)], components, variables };
   }
-  const zones = [...xml.matchAll(/<zone\s([^>]*)>/g)]
-    .map((m) => attributes(m[1]))
-    .filter((z) => z.type === 'user' && z.name)
-    .map((z) => z.name);
-  const components = [...xml.matchAll(/<component\s([^>]*)>/g)]
-    .map((m) => attributes(m[1]))
-    .map((c) => ({ manufacturer: c.manufacturer || '', model: c.model || '', name: c.user_defined_name || '', deviceClass: c.device_class || '' }));
-  return { zones: [...new Set(zones)], components };
+  return null;
 }
 
 function findSclibridge(candidates = SCLIBRIDGE_CANDIDATES) {

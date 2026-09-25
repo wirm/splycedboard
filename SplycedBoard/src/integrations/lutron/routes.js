@@ -147,9 +147,15 @@ function createRoutes(lutron) {
     return found ? { name: found, source: 'blueprint', found } : { name: DEFAULT_COMPONENT_NAME, source: 'default', found: null };
   }
 
+  // The Lutron LEAP Bridge component in the configuration Savant runs: by manufacturer and model
+  // where zoneConfig.xml can be read; else (SavantOS 11 keeps it to Savant) as the component
+  // with this profile's own state variables, SystemType and FadeTime.
   function foundController() {
-    const leap = (runningConfig()?.components || []).filter((c) => /lutron/i.test(c.manufacturer) && normalize(c.model) === 'leap bridge' && c.name);
-    return leap[0]?.name || null;
+    const config = runningConfig();
+    const byModel = (config?.components || []).find((c) => /lutron/i.test(c.manufacturer) && normalize(c.model) === 'leap bridge' && c.name);
+    if (byModel) return byModel.name;
+    const byVariables = Object.entries(config?.variables || {}).find(([, v]) => 'SystemType' in v && 'FadeTime' in v);
+    return byVariables?.[0] || null;
   }
 
   router.get('/config', (req, res) => {

@@ -129,6 +129,28 @@ test("reads the zones and the Lutron component's name from the configuration Sav
   savantRuns(null);
 });
 
+// SavantOS 11 keeps zoneConfig.xml to Savant (_savant, mode 600), but componentStateVariables.plist
+// is readable: the LEAP Bridge component is the one with this profile's SystemType and FadeTime.
+test("on SavantOS 11 the component's name comes from its state variables", async () => {
+  const { toPlist } = require('../SplycedBoard/src/core/plist');
+  savantRuns(null);
+  fs.writeFileSync(path.join(CONFIG, 'componentStateVariables.plist'), toPlist({
+    'Beta Host': { InitialValues: {}, MaxValues: {}, MinValues: {} },
+    'Lighting Controller': { InitialValues: { FadeTime: '1', SystemType: 'QSX', FanSet_0: '0' }, MaxValues: {}, MinValues: {} },
+    'Network Device': { InitialValues: {}, MaxValues: {}, MinValues: {} },
+  }));
+  savantRuns('<zone_config/>');
+  fs.chmodSync(path.join(CONFIG, 'zoneConfig.xml'), 0o000); // as Savant leaves it: not ours to read
+  try {
+    assert.deepEqual((await hub.get('/api/lutron/config')).json.controller, { name: 'Lighting Controller', source: 'blueprint', found: 'Lighting Controller' });
+    assert.deepEqual((await exported()).controllers, ['Lighting Controller']);
+  } finally {
+    fs.chmodSync(path.join(CONFIG, 'zoneConfig.xml'), 0o644);
+    fs.rmSync(path.join(CONFIG, 'componentStateVariables.plist'));
+    savantRuns(null);
+  }
+});
+
 test('typed-in zones replace the list, cleaned up', async () => {
   const { json } = await hub.put('/api/lutron/rooms/savant', { zones: [' Kitchen ', 'Living', 'Primary Suite', 'Kitchen', ''] });
   assert.deepEqual([json.savant.zones, json.savant.source], [['Kitchen', 'Living', 'Primary Suite'], 'typed']);

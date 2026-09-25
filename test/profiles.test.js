@@ -112,6 +112,39 @@ test('entities ask for their state after their representations, passing the addr
   }
 });
 
+// Savant looks for an entity's query action among the custom component actions only. The
+// Lutron profile's QueryDimmerLevel sat with the lighting resource actions in 1.13, and Savant's
+// engine logged "Action ({ name_ = QueryDimmerLevel; resourceType_ = \"\"; }) not found".
+test("entities' state queries are custom component actions", () => {
+  for (const file of files) {
+    const xml = fs.readFileSync(path.join(PROFILES, file), 'utf8');
+    const custom = [...xml.matchAll(/<custom_component_actions>([\s\S]*?)<\/custom_component_actions>/g)].map((m) => m[1]).join('');
+    for (const [, name] of xml.matchAll(/<query_status_with_action name="([^"]+)"/g)) {
+      assert.ok(custom.includes(`<action name="${name}">`), `${file}: ${name} is queried by an entity, but isn't a custom component action`);
+    }
+  }
+});
+
+// update_state_variable reads and writes only variables the profile declares, a Name_* target
+// needing Name declared as a dynamic_state_variable. With 1.13's undeclared ones, Savant logged
+// "state variable not defined: (DimmerLevel_0)" for every feedback slot.
+test('update_state_variable only reads and writes declared variables', () => {
+  for (const file of files) {
+    const xml = fs.readFileSync(path.join(PROFILES, file), 'utf8');
+    const declared = new Set([...xml.matchAll(/<(?:state|volume_state|date_state)_variable name="([^"]+)"/g)].map((m) => m[1]));
+    const dynamic = new Set([...xml.matchAll(/<dynamic_state_variable name="([^"]+)"/g)].map((m) => m[1]));
+    const known = (name) => (name.endsWith('_*') ? dynamic.has(name.slice(0, -2)) : declared.has(name) || dynamic.has(name));
+    for (const [tag, attrs, source] of xml.matchAll(/<update_state_variable\b([^>]*)>([^<]*)</g)) {
+      const attr = (a) => attrs.match(new RegExp(`\\b${a}="([^"]*)"`))?.[1];
+      assert.ok(known(attr('name')), `${file}: writes ${attr('name')}, which isn't declared: ${tag}`);
+      if (attr('wildcard_source') === 'state_variable') {
+        assert.ok(declared.has(attr('wildcard_source_name')), `${file}: ${attr('wildcard_source_name')} isn't declared: ${tag}`);
+      }
+      if (attr('update_source') === 'state_variable') assert.ok(known(source), `${file}: reads ${source}, which isn't declared: ${tag}`);
+    }
+  }
+});
+
 // SplycedBoard answers the Lutron profile's PollFeedback in SLOTS slots (lutron/feedback.js),
 // and the profile's ZoneFeedback status message writes each into two states: a slot one side
 // has and the other doesn't would lose levels, or write old ones.

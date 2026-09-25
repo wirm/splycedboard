@@ -4,7 +4,7 @@
     manufacturer="Lutron"
     model="LEAP Bridge"
     device_class="Lighting_controller"
-    rpm_xml_version="1.13"
+    rpm_xml_version="1.14"
     minimum_component_engine_version="7.2">
     <notes>
         Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
@@ -39,6 +39,12 @@
           starts (QueryDimmerLevel, read by the ZoneLevel status message).
 
         ====================== Change Log ======================
+        Version 1.14 Fix: status feedback, from what Savant's engine logged with 1.13.
+                             QueryDimmerLevel and QueryHVACStatus are custom component actions, where Savant looks
+                             for an entity's query_status_with_action ("Action … not found" before). ZoneFeedback's
+                             variables are declared: FeedbackZone0-31 and FeedbackLevel0-31, and DimmerLevel and
+                             ColorLevel as dynamic, one per zone ("state variable not defined: DimmerLevel_0"
+                             before). Shade entities ask QueryDimmerLevel.
         Version 1.13 Fix: Savant shows level changes made anywhere: keypads, the Lutron app, scenes, SplycedBoard.
                              PollFeedback asks SplycedBoard twice a second for the levels that changed, and the
                              ZoneFeedback status message writes them into DimmerLevel_(zone) and ColorLevel_(zone).
@@ -119,6 +125,76 @@
         <state_variable name="IsThermostatCurrentFanModeHigh" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeHigh" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
         <state_variable name="IsThermostatCurrentFanModeMedium" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeMedium" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
         <state_variable name="IsThermostatCurrentFanModeLow" owning_logical_component="Lighting_controller" unique_identifier="ThermostatID" state_center_binding="IsThermostatCurrentFanModeLow" state_center_type="boolean" receive_updates_from_state_center="yes">false</state_variable>
+
+        <!-- Status feedback (the ZoneFeedback status message). update_state_variable only reads and writes
+             declared variables: each answer slot, and the per-zone states they are copied into, which are
+             dynamic (DimmerLevel_486, ColorLevel_486, …). -->
+        <dynamic_state_variable name="DimmerLevel" owning_logical_component="Lighting_controller" state_center_binding="DimmerLevel" state_center_type="integer">0</dynamic_state_variable>
+        <dynamic_state_variable name="ColorLevel" owning_logical_component="Lighting_controller" state_center_binding="ColorLevel" state_center_type="integer">0</dynamic_state_variable>
+        <state_variable name="FeedbackZone0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone0" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel0" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone1" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel1" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone2" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel2" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone3" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel3" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone4" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel4" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone5" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel5" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone6" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel6" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone7" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel7" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone8" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone8" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel8" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel8" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone9" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone9" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel9" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel9" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone10" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone10" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel10" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel10" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone11" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone11" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel11" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel11" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone12" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone12" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel12" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel12" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone13" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone13" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel13" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel13" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone14" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone14" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel14" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel14" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone15" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel15" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone16" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone16" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel16" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel16" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone17" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone17" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel17" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel17" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone18" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone18" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel18" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel18" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone19" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone19" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel19" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel19" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone20" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone20" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel20" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel20" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone21" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone21" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel21" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel21" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone22" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone22" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel22" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel22" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone23" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone23" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel23" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel23" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone24" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone24" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel24" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel24" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone25" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone25" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel25" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel25" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone26" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone26" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel26" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel26" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone27" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone27" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel27" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel27" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone28" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone28" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel28" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel28" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone29" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone29" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel29" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel29" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone30" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone30" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel30" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel30" state_center_type="integer"></state_variable>
+        <state_variable name="FeedbackZone31" owning_logical_component="Lighting_controller" state_center_binding="FeedbackZone31" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackLevel31" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLevel31" state_center_type="integer"></state_variable>
     </state_variable_list>
 
     <logical_component logical_component_name="Lighting_controller">
@@ -344,70 +420,70 @@
                 <run_elements>
                     <actions>
                         <action name="ApplyZoneFeedback">
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone0">FeedbackLevel0</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone0">FeedbackLevel0</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone1">FeedbackLevel1</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone1">FeedbackLevel1</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone2">FeedbackLevel2</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone2">FeedbackLevel2</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone3">FeedbackLevel3</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone3">FeedbackLevel3</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone4">FeedbackLevel4</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone4">FeedbackLevel4</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone5">FeedbackLevel5</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone5">FeedbackLevel5</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone6">FeedbackLevel6</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone6">FeedbackLevel6</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone7">FeedbackLevel7</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone7">FeedbackLevel7</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone8">FeedbackLevel8</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone8">FeedbackLevel8</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone9">FeedbackLevel9</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone9">FeedbackLevel9</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone10">FeedbackLevel10</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone10">FeedbackLevel10</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone11">FeedbackLevel11</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone11">FeedbackLevel11</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone12">FeedbackLevel12</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone12">FeedbackLevel12</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone13">FeedbackLevel13</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone13">FeedbackLevel13</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone14">FeedbackLevel14</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone14">FeedbackLevel14</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone15">FeedbackLevel15</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone15">FeedbackLevel15</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone16">FeedbackLevel16</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone16">FeedbackLevel16</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone17">FeedbackLevel17</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone17">FeedbackLevel17</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone18">FeedbackLevel18</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone18">FeedbackLevel18</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone19">FeedbackLevel19</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone19">FeedbackLevel19</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone20">FeedbackLevel20</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone20">FeedbackLevel20</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone21">FeedbackLevel21</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone21">FeedbackLevel21</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone22">FeedbackLevel22</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone22">FeedbackLevel22</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone23">FeedbackLevel23</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone23">FeedbackLevel23</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone24">FeedbackLevel24</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone24">FeedbackLevel24</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone25">FeedbackLevel25</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone25">FeedbackLevel25</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone26">FeedbackLevel26</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone26">FeedbackLevel26</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone27">FeedbackLevel27</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone27">FeedbackLevel27</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone28">FeedbackLevel28</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone28">FeedbackLevel28</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone29">FeedbackLevel29</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone29">FeedbackLevel29</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone30">FeedbackLevel30</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone30">FeedbackLevel30</update_state_variable>
-                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
-                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%s" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone0">FeedbackLevel0</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone0">FeedbackLevel0</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone1">FeedbackLevel1</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone1">FeedbackLevel1</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone2">FeedbackLevel2</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone2">FeedbackLevel2</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone3">FeedbackLevel3</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone3">FeedbackLevel3</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone4">FeedbackLevel4</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone4">FeedbackLevel4</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone5">FeedbackLevel5</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone5">FeedbackLevel5</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone6">FeedbackLevel6</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone6">FeedbackLevel6</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone7">FeedbackLevel7</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone7">FeedbackLevel7</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone8">FeedbackLevel8</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone8">FeedbackLevel8</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone9">FeedbackLevel9</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone9">FeedbackLevel9</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone10">FeedbackLevel10</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone10">FeedbackLevel10</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone11">FeedbackLevel11</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone11">FeedbackLevel11</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone12">FeedbackLevel12</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone12">FeedbackLevel12</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone13">FeedbackLevel13</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone13">FeedbackLevel13</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone14">FeedbackLevel14</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone14">FeedbackLevel14</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone15">FeedbackLevel15</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone15">FeedbackLevel15</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone16">FeedbackLevel16</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone16">FeedbackLevel16</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone17">FeedbackLevel17</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone17">FeedbackLevel17</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone18">FeedbackLevel18</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone18">FeedbackLevel18</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone19">FeedbackLevel19</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone19">FeedbackLevel19</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone20">FeedbackLevel20</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone20">FeedbackLevel20</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone21">FeedbackLevel21</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone21">FeedbackLevel21</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone22">FeedbackLevel22</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone22">FeedbackLevel22</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone23">FeedbackLevel23</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone23">FeedbackLevel23</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone24">FeedbackLevel24</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone24">FeedbackLevel24</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone25">FeedbackLevel25</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone25">FeedbackLevel25</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone26">FeedbackLevel26</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone26">FeedbackLevel26</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone27">FeedbackLevel27</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone27">FeedbackLevel27</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone28">FeedbackLevel28</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone28">FeedbackLevel28</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone29">FeedbackLevel29</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone29">FeedbackLevel29</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone30">FeedbackLevel30</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone30">FeedbackLevel30</update_state_variable>
+                            <update_state_variable name="DimmerLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
+                            <update_state_variable name="ColorLevel_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackZone31">FeedbackLevel31</update_state_variable>
                         </action>
                     </actions>
                 </run_elements>
@@ -496,21 +572,6 @@
                             <parameter parameter_data_type="character" action_argument="Address1"/>
                         </parameter_list>
                         <delay ms_delay="100"/>
-                    </command>
-                </command_interface>
-            </action>
-
-            <!-- One load's level, asked once when Savant starts: {"zone":"486","level":55},
-                 read by the ZoneLevel status message. After that, PollFeedback brings changes. -->
-            <action name="QueryDimmerLevel">
-                <action_argument name="Address1" note="LEAP Zone ID"/>
-                <command_interface interface="ip">
-                    <command response_required="no">
-                        <command_string type="character" http_request_type="GET">api/zone/query</command_string>
-                        <parameter_list>
-                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
-                            <parameter parameter_data_type="character" action_argument="Address1"/>
-                        </parameter_list>
                     </command>
                 </command_interface>
             </action>
@@ -1168,7 +1229,7 @@
                     <osd_press_action name="ShadeSet"><argument name="ShadeLevel" value="100"/></osd_press_action>
                     <osd_hold_action name="ShadeSet"><argument name="ShadeLevel" value="0"/></osd_hold_action>
                 </toggle_button_representation>
-                <query_status_with_action name="QueryShadeGroupLevel" period_ms="0">
+                <query_status_with_action name="QueryDimmerLevel" period_ms="0">
                     <with_arg name="Address1" address_component="1"/>
                 </query_status_with_action>
             </entity>
@@ -1181,7 +1242,7 @@
                         <unique_identifier name="DeviceID" address_component="1"/>
                     </toggleOnUsingState>
                 </toggle_button_representation>
-                <query_status_with_action name="QueryShadeGroupLevel" period_ms="0">
+                <query_status_with_action name="QueryDimmerLevel" period_ms="0">
                     <with_arg name="Address1" address_component="1"/>
                 </query_status_with_action>
             </entity>
@@ -1401,6 +1462,37 @@
                 </command_interface>
             </action>
 
+            <entity name="Thermostat" address_components="1">
+                <screen_representation>
+                    <common_unique_identifier name="ThermostatID" address_component="1"/>
+                </screen_representation>
+                <query_status_with_action name="QueryHVACStatus" period_ms="0">
+                    <with_arg name="Address1" address_component="1"/>
+                </query_status_with_action>
+                <query_status_with_action name="QueryHVACStatus" period_ms="30000">
+                    <with_arg name="Address1" address_component="1"/>
+                </query_status_with_action>
+            </entity>
+
+        </resource_component_actions>
+
+        <custom_component_actions>
+            <!-- One load's level, asked once when Savant starts by the Dimmer, Switch,
+                 Color Slider, Variable Shade and Shade entities: {"zone":"486","level":55},
+                 read by the ZoneLevel status message. After that, PollFeedback brings changes. -->
+            <action name="QueryDimmerLevel">
+                <action_argument name="Address1" note="LEAP Zone ID"/>
+                <command_interface interface="ip">
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/query</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
+                            <parameter parameter_data_type="character" action_argument="Address1"/>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+            </action>
+
             <action name="QueryHVACStatus">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
@@ -1513,21 +1605,6 @@
                 </command_interface>
             </action>
 
-            <entity name="Thermostat" address_components="1">
-                <screen_representation>
-                    <common_unique_identifier name="ThermostatID" address_component="1"/>
-                </screen_representation>
-                <query_status_with_action name="QueryHVACStatus" period_ms="0">
-                    <with_arg name="Address1" address_component="1"/>
-                </query_status_with_action>
-                <query_status_with_action name="QueryHVACStatus" period_ms="30000">
-                    <with_arg name="Address1" address_component="1"/>
-                </query_status_with_action>
-            </entity>
-
-        </resource_component_actions>
-
-        <custom_component_actions>
             <!-- The levels that changed in Lutron since Savant last asked: at a keypad, in the Lutron
                  app, in a scene, or in SplycedBoard. Read by the ZoneFeedback status message. -->
             <action name="PollFeedback">
@@ -1547,7 +1624,7 @@
                     <command response_required="no">
                         <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
                         <parameter_list>
-                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.13]]></parameter>
+                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.14]]></parameter>
                         </parameter_list>
                     </command>
                 </command_interface>

@@ -4,7 +4,7 @@
     manufacturer="Lutron"
     model="LEAP Bridge"
     device_class="Lighting_controller"
-    rpm_xml_version="1.11"
+    rpm_xml_version="1.12"
     minimum_component_engine_version="7.2">
     <notes>
         Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
@@ -37,6 +37,9 @@
           optimistic state updates in each action are sufficient.
 
         ====================== Change Log ======================
+        Version 1.12 Add: ReportProfileVersion tells SplycedBoard which profile version Savant runs,
+                             so its dashboard can warn when the profile is out of date.
+                             Fix: http_request_type moved onto command_string, where Savant's schema defines it.
         Version 1.11 Fix: HVAC commands use GoToDualSetPointParameters with nested DualSetPointParameters;
                              thermostat state variables get unique_identifier="ThermostatID" so Savant
                              can bind per-instance state to the thermostat screen.
@@ -136,8 +139,8 @@
                 <action_argument name="bleColorBlue" note="Blue 0-255"/>
                 <action_argument name="bleColorWhite" note="White 0-255"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/color</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/color</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -162,8 +165,8 @@
             <action name="DimmerIncrease">
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/raise</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/raise</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -176,8 +179,8 @@
             <action name="DimmerDecrease">
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/lower</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/lower</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -190,8 +193,8 @@
             <action name="DimmerStop">
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/stop</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/stop</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -205,8 +208,8 @@
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <action_argument name="DimmerNumber" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="yes" http_request_type="GET">
-                        <command_string type="character">api/zone/query</command_string>
+                    <command response_required="yes">
+                        <command_string type="character" http_request_type="GET">api/zone/query</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -229,8 +232,8 @@
             <action name="SwitchOn">
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -245,8 +248,8 @@
             <action name="SwitchOff">
                 <action_argument name="Address1" note="LEAP Zone ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -274,8 +277,8 @@
                 <action_argument name="bleColorBlue" note="Blue 0-255"/>
                 <action_argument name="bleColorWhite" note="White 0-255"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/color</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/color</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -303,8 +306,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -322,8 +325,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -341,8 +344,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -360,8 +363,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -378,8 +381,8 @@
             <action name="SceneRecall">
                 <action_argument name="Address1" note="LEAP Virtual Button ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/scene/recall</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/scene/recall</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -401,8 +404,8 @@
                 <action_argument name="FadeTime" note="not used"/>
                 <action_argument name="DelayTime" note="not used"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/cct</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/cct</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -422,8 +425,8 @@
                 <action_argument name="Address2" note="not used"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -694,8 +697,8 @@
                 <action_argument name="FadeTime" note="not used"/>
                 <action_argument name="DelayTime" note="Delay (0-99)"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/shade/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/shade/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -712,8 +715,8 @@
             <action name="ShadeIncrease">
                 <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/shade/raise</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/shade/raise</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -726,8 +729,8 @@
             <action name="ShadeDecrease">
                 <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/shade/lower</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/shade/lower</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -740,8 +743,8 @@
             <action name="ShadeStop">
                 <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/shade/stop</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/shade/stop</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -754,8 +757,8 @@
             <action name="QueryShadeGroupLevel">
                 <action_argument name="Address1" note="LEAP Zone ID (shade)"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/shade/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/shade/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -771,8 +774,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -790,8 +793,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -809,8 +812,8 @@
                 <action_argument name="Address2" note="Button Number"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/button</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/button</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?device=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -828,8 +831,8 @@
                 <action_argument name="Address2" note="not used"/>
                 <action_argument name="Address3" note="LED ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -923,8 +926,8 @@
                 <action_argument name="Address2" note="enter 1"/>
                 <action_argument name="FanSpeed" note="0=Off, 1=Low, 2=Med, 3=High"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/zone/level</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/zone/level</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -958,8 +961,8 @@
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <action_argument name="ThermostatHeatSetPoint" note="Heat setpoint in °F"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/hvac/heat</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/hvac/heat</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -974,8 +977,8 @@
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <action_argument name="ThermostatCoolSetPoint" note="Cool setpoint in °F"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character">api/hvac/cool</command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/hvac/cool</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -989,8 +992,8 @@
             <action name="ThermostatModeSetHeat">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Heat]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/mode?mode=Heat]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1002,8 +1005,8 @@
             <action name="ThermostatModeSetCool">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Cool]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/mode?mode=Cool]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1015,8 +1018,8 @@
             <action name="ThermostatModeSetAuto">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Auto]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/mode?mode=Auto]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1028,8 +1031,8 @@
             <action name="ThermostatModeSetOff">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/mode?mode=Off]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/mode?mode=Off]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1041,8 +1044,8 @@
             <action name="ThermostatFanModeSetAuto">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Auto]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/fan?mode=Auto]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1054,8 +1057,8 @@
             <action name="ThermostatFanModeSetOn">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/fan?mode=On]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/fan?mode=On]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1067,8 +1070,8 @@
             <action name="ThermostatFanModeSetHigh">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/fan?mode=High]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/fan?mode=High]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1080,8 +1083,8 @@
             <action name="ThermostatFanModeSetMedium">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Medium]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/fan?mode=Medium]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1093,8 +1096,8 @@
             <action name="ThermostatFanModeSetLow">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="no" http_request_type="GET">
-                        <command_string type="character"><![CDATA[api/hvac/fan?mode=Low]]></command_string>
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET"><![CDATA[api/hvac/fan?mode=Low]]></command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[&id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1106,8 +1109,8 @@
             <action name="QueryHVACStatus">
                 <action_argument name="Address1" note="LEAP HVAC Controller ID"/>
                 <command_interface interface="ip">
-                    <command response_required="yes" http_request_type="GET">
-                        <command_string type="character">api/hvac/status</command_string>
+                    <command response_required="yes">
+                        <command_string type="character" http_request_type="GET">api/hvac/status</command_string>
                         <parameter_list>
                             <parameter parameter_data_type="character"><![CDATA[?id=]]></parameter>
                             <parameter parameter_data_type="character" action_argument="Address1"/>
@@ -1228,6 +1231,23 @@
             </entity>
 
         </resource_component_actions>
+
+        <custom_component_actions>
+            <!-- Tells SplycedBoard which version of this profile Savant is running, so its dashboard
+                 can warn when the profile is out of date. Keep version= equal to rpm_xml_version. -->
+            <action name="ReportProfileVersion">
+                <command_interface interface="ip">
+                    <command response_required="no">
+                        <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
+                        <parameter_list>
+                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.12]]></parameter>
+                        </parameter_list>
+                    </command>
+                </command_interface>
+                <execute_on_schedule period_ms="0"/>
+                <execute_on_schedule period_ms="60000"/>
+            </action>
+        </custom_component_actions>
 
     </logical_component>
 

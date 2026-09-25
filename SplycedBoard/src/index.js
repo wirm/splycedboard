@@ -14,6 +14,7 @@
 const logger = require('./core/log');
 const paths = require('./core/paths');
 const { Hub } = require('./core/hub');
+const { Updater, githubRepo } = require('./core/updates');
 const { createWebServer } = require('./web/server');
 const pkg = require('../package.json');
 
@@ -36,6 +37,17 @@ async function main() {
   const hub = new Hub();
   hub.load();
 
+  // Checks GitHub for new releases; installs them only as the launchd service.
+  const updates = new Updater({
+    version: pkg.version,
+    repo: githubRepo(pkg),
+    dataDir: paths.DATA_DIR,
+    logDir: paths.LOG_DIR,
+    managed: MANAGED,
+    log: logger.createLogger('update'),
+  });
+  if (MANAGED) updates.startAutoCheck();
+
   let web = null;
   let stopping = false;
   const shutdown = async (reason) => {
@@ -43,6 +55,7 @@ async function main() {
     stopping = true;
     log.info(`Shutting down (${reason})`);
     setTimeout(() => process.exit(0), 5000).unref(); // don't hang on a stuck socket
+    updates.stop();
     await web?.close();
     await hub.stopAll();
     process.exit(0);
@@ -53,6 +66,7 @@ async function main() {
   // Dashboard first, so it's reachable even while integrations are starting.
   web = await createWebServer({
     hub,
+    updates,
     app: {
       name: paths.APP_NAME,
       version: pkg.version,

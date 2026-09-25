@@ -42,14 +42,23 @@ In **HomeWorks Designer** (QSX) or **RA3 Setup**:
 
 ### Install the profile
 
-Download it from the dashboard (or take `profiles/lutron_leap_bridge.xml`) and copy it into
-Blueprint's profile folder on the Mac that runs Blueprint:
+Download it from the dashboard (or take `profiles/lutron_leap bridge.xml`) on the Mac that runs
+Blueprint. Add it to your profile library in Blueprint's Preferences. On older Blueprint, copy it
+into Blueprint's profile folder instead and restart Blueprint:
 
 ```
 ~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/
 ```
 
-Restart Blueprint.
+Keep the file name `lutron_leap bridge.xml`. Blueprint finds a profile by its
+`<manufacturer>_<model>` file name, so a renamed copy (even `… (1).xml` from a second download)
+gives "Component not found".
+
+From version 1.12, the profile reports its version to SplycedBoard. The dashboard's Overview
+warns when Savant runs a different version than SplycedBoard ships. Configurations still on
+1.11 or earlier show as a profile that "doesn't report its version". Add the new profile to
+Blueprint's library, update the Lutron LEAP Bridge component to it, and upload the
+configuration.
 
 ### Add the device
 
@@ -108,9 +117,9 @@ Palladiom thermostats use the HVAC controller resource with **Address1 = thermos
 
 ## HTTP API (what the profile calls)
 
-All on port 47200. The profile (v1.11 and earlier) calls these without the `/lutron` segment,
-for example `/api/zone/level`. SplycedBoard answers on both paths, so existing Blueprint
-configurations keep working unchanged.
+All on port 47200. The profile calls these without the `/lutron` segment, for example
+`/api/zone/level`. SplycedBoard answers on both paths, so existing Blueprint configurations
+keep working unchanged.
 
 | Endpoint | Purpose |
 |---|---|
@@ -125,6 +134,7 @@ configurations keep working unchanged.
 | `GET /api/lutron/cct?id=&level=` | Color temperature: 0 → 1400 K … 100 → 10000 K |
 | `GET /api/lutron/hvac/status?id=` | Thermostat state for the profile |
 | `GET /api/lutron/hvac/heat\|cool?id=&setpoint=` · `hvac/mode\|fan?id=&mode=` | Thermostat control |
+| `GET /api/hub/profile-report?integration=lutron&version=` | ReportProfileVersion (from 1.12): the profile version Savant runs, at startup and every minute |
 
 Fade and delay values are accepted but not yet sent to the processor.
 

@@ -37,7 +37,7 @@ test('installer CLI lists integrations and saves the chosen set', () => {
   assert.equal(saved.integrations.scli.enabled, true);
   assert.deepEqual(JSON.parse(cli('list')).map((i) => [i.id, i.enabled]), [['lutron', false], ['appletv', false], ['scli', true]]);
 
-  assert.match(cli('profiles', 'lutron,scli'), /lutron_leap_bridge\.xml\n.*ip_requests\.xml\n$/);
+  assert.match(cli('profiles', 'lutron,scli'), /\/lutron_leap bridge\.xml\n.*\/ip_requests\.xml\n$/);
   assert.throws(() => cli('set-enabled', 'nope'), /Unknown integration/);
 });
 

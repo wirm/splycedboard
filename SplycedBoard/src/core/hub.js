@@ -23,7 +23,8 @@ const path = require('path');
 
 const logger = require('./log');
 const { JsonStore } = require('./store');
-const { DATA_DIR } = require('./paths');
+const { DATA_DIR, PROFILES_DIR } = require('./paths');
+const { ProfileTracker, readProfile } = require('./profiles');
 const registry = require('../integrations');
 
 const STOP_TIMEOUT_MS = 10000;
@@ -43,6 +44,9 @@ class Hub extends EventEmitter {
     this.settings = new JsonStore(path.join(dataDir, 'hub.json'), { integrations: {}, verbose: true });
     this.log = logger.createLogger('hub');
     this.entries = new Map(); // id → { manifest, instance, running, error, queue }
+    // Which version of each Savant profile Savant runs (see core/profiles.js).
+    this.profiles = new ProfileTracker({ log: this.log.child('profiles') });
+    this.profiles.on('change', () => this.emit('change'));
   }
 
   /** Create every integration instance. Nothing is started yet. */
@@ -52,6 +56,10 @@ class Hub extends EventEmitter {
     for (const manifest of registry.manifests()) {
       const entry = { manifest, instance: null, running: false, error: null, queue: Promise.resolve() };
       this.entries.set(manifest.id, entry);
+      if (manifest.profile) {
+        const shipped = readProfile(path.join(PROFILES_DIR, manifest.profile));
+        this.profiles.register(manifest.id, { name: manifest.name, file: manifest.profile, ...shipped });
+      }
       try {
         entry.instance = registry.load(manifest.id).create(this._context(manifest));
       } catch (err) {
@@ -59,6 +67,7 @@ class Hub extends EventEmitter {
         this.log.error(`Could not load integration "${manifest.id}":`, err);
       }
     }
+    this.profiles.start();
   }
 
   /** Start every integration that is switched on. */
@@ -149,6 +158,7 @@ class Hub extends EventEmitter {
   }
 
   async stopAll() {
+    this.profiles.stop();
     for (const entry of this.entries.values()) {
       await this._enqueue(entry, () => this._stop(entry));
     }
@@ -179,7 +189,7 @@ class Hub extends EventEmitter {
       try { status = entry.instance.status(); } catch (err) { status = { level: 'error', text: err.message }; }
     }
     const { id: _id, ...manifest } = entry.manifest;
-    return { id, ...manifest, enabled, running: entry.running, status };
+    return { id, ...manifest, enabled, running: entry.running, status, profileStatus: this.profiles.summary(id) };
   }
 
   list() {

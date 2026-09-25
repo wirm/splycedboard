@@ -3,9 +3,10 @@
  *
  *   /                  dashboard (public/)
  *   /ui/<id>/...       an integration's dashboard panel (src/integrations/<id>/ui/)
- *   /api/hub/...       hub management: integrations on/off, profiles, logs, settings, restart
+ *   /api/hub/...       hub management: integrations on/off, profiles, logs, settings, restart,
+ *                      updates, and profile-report (called by the Savant profiles themselves)
  *   /api/<id>/...      each integration's own API — answers 503 while the integration is off
- *   /api/...           legacy paths for integrations with "legacyApiRoot" (Lutron profile ≤ v1.11)
+ *   /api/...           root paths for integrations with "legacyApiRoot" (the Lutron profile's)
  *   /ws                WebSocket: { source: 'hub' | <id>, type, ... }
  */
 const fs = require('fs');
@@ -21,6 +22,8 @@ const { listen, close } = require('../core/net');
 
 const WEB_PORT = Number(process.env.SPLYCEDBOARD_WEB_PORT) || 47200;
 
+const clientIp = (req) => String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+
 function lanAddresses() {
   const out = [];
   for (const addrs of Object.values(os.networkInterfaces())) {
@@ -32,10 +35,11 @@ function lanAddresses() {
 }
 
 /**
- * @param hub   core/hub Hub, already load()ed
- * @param app   { name, version, runtime, managed, startedAt, restart() }
+ * @param hub       core/hub Hub, already load()ed
+ * @param app       { name, version, runtime, managed, startedAt, restart() }
+ * @param updates   core/updates Updater (optional: no update API without it)
  */
-async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
+async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = null }) {
   const log = logger.createLogger('web');
   const app = express();
   app.disable('x-powered-by');
@@ -65,9 +69,39 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
     },
     settings: hub.getSettings(),
     integrations: hub.list(),
+    update: updates ? updates.status() : null,
   });
 
   api.get('/', (req, res) => res.json(snapshot()));
+
+  // Called by the Savant profiles' ReportProfileVersion action (see core/profiles.js).
+  api.get('/profile-report', (req, res) => {
+    const integration = String(req.query.integration || '');
+    const version = String(req.query.version || '');
+    if (!hub.profiles.has(integration)) {
+      return res.status(404).json({ error: `No integration "${integration}" with a Savant profile` });
+    }
+    if (!/^\d+(\.\d+)*$/.test(version)) return res.status(400).json({ error: 'version (like 1.12) required' });
+    const state = hub.profiles.report(integration, String(req.query.device || '') || clientIp(req), version);
+    res.json({ ok: true, state, shipped: hub.profiles.summary(integration).version });
+  });
+
+  if (updates) {
+    // Expected failures (offline, nothing newer, already updating) carry a status: answer
+    // them with the updater's state rather than logging them as server errors.
+    const updateAction = (fn) => async (req, res, next) => {
+      try {
+        res.json(await fn());
+      } catch (err) {
+        if (!err.status) return next(err);
+        res.status(err.status).json({ error: err.message, update: updates.status() });
+      }
+    };
+    api.get('/update', (req, res) => res.json(updates.status()));
+    api.get('/update/log', (req, res) => res.type('text/plain').send(updates.logTail()));
+    api.post('/update/check', updateAction(() => updates.check()));
+    api.post('/update/install', updateAction(() => updates.install()));
+  }
 
   api.put('/integrations/:id', async (req, res, next) => {
     const { enabled } = req.body || {};
@@ -122,6 +156,14 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
   // `fallthrough` is only used by the legacy root mount, where unmatched paths
   // must reach the final 404 rather than stop here.
   const integrationApi = (id, { fallthrough = false } = {}) => (req, res, next) => {
+    // Savant calling the integration (browsers send Sec-Fetch-Mode, Savant doesn't): lets the
+    // hub notice a profile too old to report its version. Keyed like the profile's reports:
+    // by the Apple TV address in ?ip=, else by the calling host.
+    if (!req.headers['sec-fetch-mode']) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) hub.profiles.traffic(id, String(req.query.ip || '') || clientIp(req));
+      });
+    }
     const instance = hub.instance(id);
     if (!instance) {
       const { name, enabled } = hub.describe(id);
@@ -133,8 +175,8 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
   };
 
   // /api/hub and every /api/<id> always answer (200/404/503), so the legacy root
-  // mount only ever sees paths nobody else owns — e.g. /api/zone/level from
-  // Lutron profiles ≤ v1.11.
+  // mount only ever sees paths nobody else owns — e.g. /api/zone/level from the
+  // Lutron profile.
   const integrations = hub.list();
   for (const { id } of integrations) app.use(`/api/${id}`, integrationApi(id));
   for (const { id, legacyApiRoot } of integrations) {
@@ -179,8 +221,10 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
     }, 50);
   };
   const onMessage = (msg) => broadcast(msg);
+  const onUpdate = (update) => broadcast({ source: 'hub', type: 'update', update });
   hub.on('change', onChange);
   hub.on('message', onMessage);
+  updates?.on('change', onUpdate);
   const stopLogFeed = logger.onEntry((entry) => broadcast({ source: 'hub', type: 'log', entry }));
 
   await listen(server, port);
@@ -191,6 +235,7 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo }) {
     async close() {
       hub.off('change', onChange);
       hub.off('message', onMessage);
+      updates?.off('change', onUpdate);
       stopLogFeed();
       clearTimeout(changeTimer);
       for (const ws of wss.clients) ws.terminate();

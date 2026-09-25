@@ -6,8 +6,8 @@ switched on or off from a web dashboard without restarting anything.
 
 | Integration | What it does | Savant profile | Docs |
 |---|---|---|---|
-| **Lutron LEAP** | HomeWorks QSX / RadioRA 3 lighting, shades, keypads, scenes and Palladiom thermostats | `profiles/lutron_leap_bridge.xml` | [docs/lutron.md](docs/lutron.md) |
-| **Apple TV** | IP control of any number of Apple TVs (Companion protocol, PIN pairing, no HomeKit) | `profiles/apple_tv_ip.xml` | [docs/appletv.md](docs/appletv.md) |
+| **Lutron LEAP** | HomeWorks QSX / RadioRA 3 lighting, shades, keypads, scenes and Palladiom thermostats | `profiles/lutron_leap bridge.xml` | [docs/lutron.md](docs/lutron.md) |
+| **Apple TV** | IP control of any number of Apple TVs (Companion protocol, PIN pairing, no HomeKit) | `profiles/apple_apple tv (splycedboard).xml` | [docs/appletv.md](docs/appletv.md) |
 | **SCLI Bridge** | Lets other devices read/write Savant state and send service requests via `sclibridge` | `profiles/ip_requests.xml` | [docs/scli.md](docs/scli.md) |
 
 This folder is everything a Pro Host needs, and one Terminal command downloads and installs it;
@@ -44,7 +44,7 @@ cloud dependency.
 
 ## Install
 
-On the Pro Host, open Terminal and paste:
+On the Pro Host, open Terminal (in Applications › Utilities) and paste:
 
 ```bash
 cd "$(mktemp -d)" && curl -fsSLO https://github.com/wirm/splycedboard/releases/latest/download/SplycedBoard.tar.gz && tar -xzf SplycedBoard.tar.gz && ./SplycedBoard/install
@@ -52,11 +52,16 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/wirm/splycedboard/releases/l
 
 That downloads the latest release of this folder from GitHub and opens its installer.
 
-If you already have the folder, open Terminal in it and run `./install`. You might have downloaded
-`SplycedBoard.zip` from the [latest release](https://github.com/wirm/splycedboard/releases/latest)
-in a browser, or copied the folder over with AirDrop, USB or `scp -r`. Use Terminal rather than
-double-clicking `install`: macOS blocks double-clicked scripts that came from a download or
-AirDrop.
+Maybe you already have the folder: you downloaded `SplycedBoard.zip` from the
+[latest release](https://github.com/wirm/splycedboard/releases/latest) in a browser, or copied the
+folder over with AirDrop, USB or `scp -r`. Then run its installer through Terminal: type `bash`
+and a space, drag `install` from the folder into the Terminal window, and press Return.
+
+> **Don't double-click `install`.** It isn't signed with an Apple Developer ID. If it came from a
+> browser download or AirDrop, macOS won't open it from Finder, and since macOS 15, Control-click ›
+> Open no longer gets around that. Both ways above avoid the check. The Terminal line downloads
+> with `curl`, which doesn't flag files as downloaded. `bash install` has bash read the script
+> rather than macOS opening it.
 
 The installer opens a few macOS dialogs:
 
@@ -87,9 +92,20 @@ Options: `./install --headless` asks in the terminal instead (automatic over SSH
 
 ### Update
 
-Paste the Terminal line from [Install](#install) again; it always fetches the latest release.
-Re-running `./install` from any newer copy works too. Settings, pairing and integration choices
-are kept. Dependencies are only re-downloaded when `package.json` changed.
+The dashboard checks GitHub for a new release twice a day, and shows **Update available** at
+the top when there is one. **Settings → Updates** has **Check now** and **Update to vX**.
+Updating downloads the release, checks it against the SHA-256 checksum GitHub publishes, and
+runs its installer, the same way as the Terminal line. Integrations pause for about a minute,
+then the dashboard reloads on the new version. The installer's output is in
+`logs/update.log`.
+
+The Terminal line from [Install](#install) works too: paste it again to get the latest release.
+So does running the installer from any newer copy, through Terminal as described there.
+
+Either way, settings, pairing and integration choices are kept, and dependencies are only
+re-downloaded when `package.json` changed. After an update, check the Overview for Savant
+profiles that need updating in Blueprint too (see
+[Connecting an integration to Savant](#connecting-an-integration-to-savant)).
 
 ### What's in ~/Desktop/SplycedBoard
 
@@ -99,7 +115,7 @@ profiles/               Savant component profiles, one per integration
 docs/                   setup guides: Lutron, Apple TV, SCLI Bridge
 scripts/                start · stop · restart · status · logs · dev · uninstall
 data/                   settings, Lutron certificates, Apple TV pairings (back this up)
-logs/                   splycedboard.log (rotates at 5 MB, keeps 3)
+logs/                   splycedboard.log (rotates at 5 MB, keeps 3), update.log (the last update)
 install, src/, public/  the app itself
 ```
 
@@ -109,23 +125,44 @@ install, src/, public/  the app itself
 
 - **Overview**: every integration with a live status, an on/off switch, its ports, and a
   download button for its Savant profile. Switching one off closes its ports and APIs
-  immediately. Savant loses control of that system until it's switched back on.
+  immediately. Savant loses control of that system until it's switched back on. A yellow
+  note appears when Savant runs a different version of an integration's profile than this
+  SplycedBoard ships.
 - **One page per integration**: Lutron has discovery, pairing, loads, thermostats, keypads
   and scenes. Apple TV has pairing, a card per Apple TV, and a remote with an app launcher.
   The SCLI Bridge has status and a command runner.
 - **Logs**: live log view, filterable by integration, level and text, with a download
   button.
-- **Settings**: service info, restart, verbose logging, folders, and all Savant profiles.
+- **Settings**: service info, restart, updates, verbose logging, folders, and all Savant
+  profiles, each with the version it ships and the version Savant reports running.
 
 ## Connecting an integration to Savant
 
-1. Download the integration's profile (dashboard or `profiles/`) and copy it into
-   `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/`
-   on the Mac that runs Blueprint. Restart Blueprint.
+1. Download the integration's profile (dashboard or `profiles/`) on the Mac that runs
+   Blueprint. Add it to your profile library in Blueprint's Preferences. On older Blueprint,
+   copy it into `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/`
+   and restart Blueprint. **Keep the file name.** Blueprint finds a profile by its
+   `<manufacturer>_<model>` file name, so a renamed copy (even `… (1).xml` from a second download)
+   gives "Component not found".
 2. Add the component in Blueprint and set its address to `127.0.0.1`. SplycedBoard runs on
    the Pro Host itself. HTTP profiles use port `47200`.
 3. Fill in the data tables using the IDs shown on the integration's dashboard page, then
    upload the configuration.
+
+### Profile versions
+
+The Lutron (from 1.12) and Apple TV (from 1.2) profiles tell SplycedBoard which version of
+themselves Savant is running, when Savant starts and every minute after. The dashboard
+compares that with the version this SplycedBoard ships, and shows a yellow note on the
+integration's Overview card when they differ.
+
+- **Older in Savant**: add the new profile to Blueprint's library, update the component
+  in the configuration, and upload it to the host.
+- **Newer in Savant**: update SplycedBoard.
+- **Doesn't report**: Savant is calling the integration, but hasn't reported a version for two
+  minutes. The profile predates version reporting, so it's older: update it as above.
+
+**Settings → Savant profiles** lists each component Savant reported, and the version it runs.
 
 ---
 
@@ -156,8 +193,9 @@ service first, because both need the same ports.
 Outgoing: Lutron processors on 8081 (LEAP) and 8083 (pairing); Apple TVs on 49153
 (Companion) and 5353/UDP (discovery).
 
-The dashboard and ports have no authentication, so anything on the LAN can reach them.
-Keep the Pro Host on a trusted network.
+The dashboard and ports have no authentication, so anything on the LAN can reach them. That
+includes switching integrations off, and starting an update, though only ever to the latest
+official release. Keep the Pro Host on a trusted network.
 
 ---
 
@@ -169,5 +207,5 @@ Keep the Pro Host on a trusted network.
 | Settings | `…/SplycedBoard/data/hub.json`, `…/data/<integration>/settings.json` |
 | Lutron certificates | `…/SplycedBoard/data/lutron/certs/` |
 | Apple TV pairings | `…/SplycedBoard/data/appletv/settings.json` |
-| Logs | `…/SplycedBoard/logs/splycedboard.log` (+ `launchd.log` for crash output) |
+| Logs | `…/SplycedBoard/logs/splycedboard.log` (+ `launchd.log` for crash output, `update.log` for the last update) |
 | launchd agent | `~/Library/LaunchAgents/com.splycedboard.hub.plist` |

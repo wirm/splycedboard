@@ -467,6 +467,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   margin-top: 1px;
 }
 .steps-list strong, .steps-list code { color: var(--text); }
+.steps-list code { overflow-wrap: anywhere; }
 
 /* ── Key/value table (settings) ── */
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; font-size: 13px; }
@@ -580,10 +581,56 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .toast.error { border-left-color: var(--red); }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 
+/* ── Updates and Savant profile versions ── */
+.update-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid rgba(200,168,75,0.35);
+  border-radius: 999px;
+  padding: 4px 11px;
+  text-decoration: none;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.update-chip:hover { background: rgba(200,168,75,0.25); }
+.update-log {
+  max-height: 240px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#updateResult { margin: 12px 0 0; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.int-warning {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fde68a;
+  background: rgba(234,179,8,0.1);
+  border: 1px solid rgba(234,179,8,0.3);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.profile-use.warn { color: #fde68a; }
+.version-tag { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+
 /* ── Narrow screens: sidebar becomes a drop-down menu ── */
 @media (max-width: 800px) {
   .menu-btn { display: inline-flex; align-items: center; justify-content: center; }
   .host-chip { display: none; }
+  .wide-only { display: none; }
+  .topbar-right { gap: 10px; }
   .sidebar {
     display: none;
     position: fixed;
@@ -607,4 +654,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   .two-col { grid-template-columns: 1fr; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 8px; }
+}
+
+/* ── Phones: the connection badge keeps its dot (its tooltip explains it), and an update
+   chip takes the place of the name beside the logo ── */
+@media (max-width: 420px) {
+  #wsText { display: none; }
+  .topbar:has(.update-chip:not([hidden])) .logo span { display: none; }
 }

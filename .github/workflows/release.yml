@@ -56,7 +56,7 @@ jobs:
             printf 'cd "$(mktemp -d)" && curl -fsSLO %s/SplycedBoard.tar.gz && tar -xzf SplycedBoard.tar.gz && ./SplycedBoard/install\n' "$url"
             echo '```'
             echo
-            echo 'Or download **SplycedBoard.zip** below, unzip it, and run `./install` inside it from Terminal.'
+            echo 'Or download **SplycedBoard.zip** below and unzip it. Then, in Terminal, type `bash` and a space, drag `install` from the folder into the window, and press Return. Double-clicking `install` does not work: it is not signed with an Apple Developer ID, so macOS will not open a downloaded copy.'
           } > "$RUNNER_TEMP/notes.md"
           # A tag like v2.1.0-beta.1 is a pre-release, which the "latest" download link skips.
           prerelease=()

@@ -26,7 +26,9 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/wirm/splycedboard/releases/l
 It downloads the `SplycedBoard` folder from the latest release and opens the installer. Run the
 same line again to update. Each release also carries a `SplycedBoard.zip` for browser downloads
 (direct link: <https://github.com/wirm/splycedboard/releases/latest/download/SplycedBoard.zip>),
-and copying the folder over by hand (AirDrop, USB, `scp -r`) still works. See
+and copying the folder over by hand (AirDrop, USB, `scp -r`) still works. Either way, run
+`bash install` in Terminal. **Don't double-click `install`**: it isn't signed with an Apple
+Developer ID, so macOS won't open a downloaded or AirDropped copy from Finder. See
 [Install](SplycedBoard/README.md#install).
 
 The folder holds no dependencies or build output; the installer fetches dependencies on the host.
@@ -46,6 +48,10 @@ The tag starts the [release workflow](.github/workflows/release.yml). It runs th
 test-installs them on a macOS runner, and publishes the release. A tag with a hyphen, such as
 `v2.1.0-beta.1`, becomes a pre-release. The `latest` links skip pre-releases, so install one from
 its own release page.
+
+Hosts' dashboards check for new releases twice a day, and install them from **Settings →
+Updates**; **Check now** there sees a release immediately. If a release changes a Savant
+profile, each host's Overview flags it until the profile is updated in Blueprint as well.
 
 To build the same files without publishing (to hand-carry to a host, say), run `npm run package`;
 they land in `dist/`. `npm run check-package` then test-installs them the way a host would, in a

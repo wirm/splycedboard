@@ -1,7 +1,7 @@
 /**
  * Lutron HTTP API — mounted at /api/lutron (and at /api for profiles ≤ v1.11).
  *
- * Savant profile endpoints (GET + query string, called by lutron_leap_bridge.xml):
+ * Savant profile endpoints (GET + query string, called by the Lutron LEAP Bridge profile):
  *   zone/query?id                     → { level }   (QueryDimmerLevel polling)
  *   zone/level?id&level[&fade]         zone/raise|lower|stop?id
  *   area/level?id&level[&fade]

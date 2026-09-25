@@ -22,7 +22,7 @@ src/integrations/mydevice/
   ui/panel.html      dashboard page (optional)
   ui/panel.js        its script
   ui/panel.css       its styles (optional)
-profiles/my_device.xml  the Savant component profile
+profiles/mymaker_my device.xml   the Savant component profile (named as in section 5)
 ```
 
 Then add the id to `INTEGRATIONS` in `src/integrations/index.js`.
@@ -35,7 +35,7 @@ Then add the id to `INTEGRATIONS` in `src/integrations/index.js`.
   "name": "My Device",
   "icon": "🔷",
   "description": "What it controls, in one sentence — shown on the Overview card and in the installer.",
-  "profile": "my_device.xml",
+  "profile": "mymaker_my device.xml",
   "defaultEnabled": false,
   "endpoints": [
     { "port": 47200, "protocol": "HTTP", "path": "/api/mydevice", "use": "Savant profile commands" }
@@ -158,13 +158,47 @@ module.exports = { create: (ctx) => new MyDeviceIntegration(ctx) };
 
 ## 5. The Savant profile
 
+**Name the file after the profile's own `manufacturer` and `model`**, lowercase, joined by an
+underscore: `manufacturer="MyMaker" model="My Device"` → `mymaker_my device.xml`. That's how
+Savant names its own library, and how Blueprint finds a profile. Under any other name Blueprint
+still lists the component, but adding it fails with "Component not found".
+`test/profiles.test.js` checks every profile.
+
+**Every change to a profile must bump its version.** Increase `rpm_xml_version` on the root
+`<component>` element (1.9 → 1.10 → 1.11), change `version=` in its ReportProfileVersion
+action to match, and add a line to the Change Log in its `<notes>`. `test/profiles.test.js`
+fails when a profile changed since the last release tag without a higher version.
+
+**Make it report its version.** A ReportProfileVersion action, run when Savant starts and
+every minute, tells SplycedBoard which version Savant runs, so the dashboard can warn when it
+isn't the one SplycedBoard ships. Put it in `<custom_component_actions>`:
+
+```xml
+<action name="ReportProfileVersion">
+    <command_interface interface="ip">
+        <command response_required="no">
+            <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
+            <parameter_list>
+                <parameter parameter_data_type="character"><![CDATA[?integration=mydevice&version=1.0]]></parameter>
+            </parameter_list>
+        </command>
+    </command_interface>
+    <execute_on_schedule period_ms="0"/>
+    <execute_on_schedule period_ms="60000"/>
+</action>
+```
+
+Savant can't read `rpm_xml_version` itself, so the version is written out here, and the
+test checks the two match. With one component per device, append `&device=` and the device's
+address, as the Apple TV profile does. That makes the dashboard report each device separately.
+
 Point HTTP commands at `127.0.0.1:47200` with `command_string` paths under
-`api/mydevice/…`, the same way `profiles/lutron_leap_bridge.xml` does.
+`api/mydevice/…`, the same way the Lutron profile (`profiles/lutron_leap bridge.xml`) does.
 
 For several devices of the same kind (like Apple TVs), use one Savant component per device
 and a user-editable state variable holding that device's IP. Pass it in every command, as
-`profiles/apple_tv_ip.xml` does with `AppleTVAddress`, and add a test that reads the profile
-and calls every action against the server, like `test/appletv.test.js` does.
+`profiles/apple_apple tv (splycedboard).xml` does with `AppleTVAddress`, and add a test that
+reads the profile and calls every action against the server, like `test/appletv.test.js` does.
 
 The Overview card and Settings page offer the profile for download, and the installer can copy
 it into Blueprint.

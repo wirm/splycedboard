@@ -1,6 +1,7 @@
 /**
  * Minimal Apple property-list (XML) writer, for files Savant Blueprint imports
- * (lighting tables, etc.). Output is tab-indented like Blueprint's own exports.
+ * (lighting tables, etc.) and the updater's launchd job. Output is tab-indented like
+ * Blueprint's own exports.
  */
 
 function esc(s) {

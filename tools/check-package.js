@@ -148,6 +148,16 @@ async function main() {
   check((await (await request('GET', '/')).text()).includes('</html>'), 'The dashboard page is missing');
   ok('The dashboard, its panels and the Savant profiles are all served');
 
+  // What the profiles' ReportProfileVersion action calls, with the version the package ships.
+  for (const { id, name, profileStatus } of hub.integrations) {
+    if (!profileStatus?.version) continue;
+    const res = await (await request('GET', `/api/hub/profile-report?integration=${id}&version=${profileStatus.version}`)).json();
+    check(res.state === 'current', `${name}: a report of the shipped profile ${profileStatus.version} came back "${res.state}"`);
+  }
+  const update = await (await request('GET', '/api/hub/update')).json();
+  check(update.current === version && update.canInstall && update.repo, 'The update check is not set up');
+  ok(`Profile version reports and the update check (${update.repo}) answer`);
+
   step('Stopping it the way launchd does (SIGTERM)');
   service.kill('SIGTERM');
   const timeout = new Promise((resolve) => setTimeout(resolve, 10000, { timedOut: true }).unref());

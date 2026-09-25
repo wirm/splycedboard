@@ -39,9 +39,12 @@ updates and restarts; back that folder up.
 
 ## 2 · Blueprint
 
-1. Download the profile from the dashboard (or take `profiles/apple_tv_ip.xml`) and copy it into
-   `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/` on the
-   Mac that runs Blueprint. Restart Blueprint.
+1. Download the profile from the dashboard (or take `profiles/apple_apple tv (splycedboard).xml`)
+   on the Mac that runs Blueprint. Add it to your profile library in Blueprint's Preferences. On
+   older Blueprint, copy it into
+   `~/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles/` and
+   restart Blueprint. Keep the file name: Blueprint finds a profile by its
+   `<manufacturer>_<model>` file name, so a renamed copy gives "Component not found".
 2. For **each** Apple TV, add an **Apple TV (SplycedBoard)** component. Connect its HDMI output
    as you normally would.
 3. Set each component's **IP address to `127.0.0.1`** (port 47200). Every Apple TV component
@@ -53,6 +56,11 @@ updates and restarts; back that folder up.
 
 The Savant app shows its standard Apple TV remote for these components, the same one as for an
 IR-controlled Apple TV.
+
+From version 1.2, each component reports its profile version to SplycedBoard. The dashboard's
+Overview warns when one runs a different version than SplycedBoard ships. Components still on
+1.1 show as a profile that "doesn't report its version". Add the new profile to Blueprint's
+library, update the components to it, and upload the configuration.
 
 ### Actions
 
@@ -102,6 +110,7 @@ On port 47200. Everything Savant uses takes `ip=` (the AppleTVAddress).
 | `GET /api/appletv/apps?ip=` | `[{ "bundleId": "com.netflix.Netflix", "name": "Netflix" }, …]` |
 | `GET /api/appletv/app?ip=&id=` | Launch an app (bundle id or URL) |
 | `GET /api/appletv/pair/start?ip=` · `pair/finish?ip=&pin=` | Pair without the dashboard |
+| `GET /api/hub/profile-report?integration=appletv&version=&device=` | ReportProfileVersion (from 1.2): the profile version this component runs, at startup and every minute |
 
 For example, from Terminal on the Pro Host:
 

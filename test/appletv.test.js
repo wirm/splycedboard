@@ -148,10 +148,10 @@ test('app list and launching', async () => {
 
 /** Every action in the Savant profile, as the URL Savant would request. */
 function profileRequests(ip) {
-  const xml = require('fs').readFileSync(path.join(__dirname, '..', 'SplycedBoard', 'profiles', 'apple_tv_ip.xml'), 'utf8');
+  const xml = require('fs').readFileSync(path.join(__dirname, '..', 'SplycedBoard', 'profiles', 'apple_apple tv (splycedboard).xml'), 'utf8');
   const out = [];
   for (const [, name, body] of xml.matchAll(/<action name="([^"]+)">([\s\S]*?)<\/action>/g)) {
-    const command = body.match(/<command_string type="character">([^<]+)<\/command_string>/)[1];
+    const command = body.match(/<command_string type="character"[^>]*>([^<]+)<\/command_string>/)[1];
     const params = [...body.matchAll(/<parameter parameter_data_type="character"(?: (state_variable|action_argument)="([^"]+)")?\s*(?:\/>|><!\[CDATA\[(.*?)\]\]><\/parameter>)/g)]
       .map(([, kind, ref, text]) => {
         if (kind === 'state_variable') return ref === 'AppleTVAddress' ? ip : '';
@@ -165,13 +165,20 @@ function profileRequests(ip) {
 
 test('every action in the Savant profile is accepted by SplycedBoard', async () => {
   const requests = profileRequests(TVS[0].ip).filter((r) => !r.name.startsWith('Pair'));
-  assert.equal(requests.length, 28);
+  assert.equal(requests.length, 29);
   for (const { name, url } of requests) {
     const res = await hub.get(url);
     assert.equal(res.status, 200, `${name} → ${url}: ${res.text}`);
   }
   const statusAction = requests.find((r) => r.name === 'QueryStatus');
   assert.deepEqual(Object.keys((await hub.get(statusAction.url)).json).sort(), ['connected', 'name', 'playing', 'power', 'state']);
+
+  // ReportProfileVersion: SplycedBoard now knows this Apple TV's component runs the shipped profile.
+  const report = requests.find((r) => r.name === 'ReportProfileVersion');
+  assert.equal((await hub.get(report.url)).json.state, 'current');
+  const { profileStatus } = (await hub.get('/api/hub')).json.integrations.find((i) => i.id === 'appletv');
+  assert.deepEqual(profileStatus.sources.map((s) => [s.device, s.state]), [[TVS[0].ip, 'current']]);
+  assert.equal(profileStatus.warning, null);
 });
 
 test('a command after the Apple TV dropped the connection reconnects and still goes through', async () => {

@@ -16,6 +16,7 @@ const SB = (() => {
 
   let app = null;          // /api/hub → app info
   let settings = null;     // /api/hub → hub settings
+  let update = null;       // /api/hub → update status (core/updates.js)
   let integrations = [];
   const panels = {};       // id → { page, root, banner, def }
   const panelDefs = {};    // filled by SB.registerPanel as panel scripts load
@@ -105,6 +106,7 @@ const SB = (() => {
             </label>
           </div>
           <p class="int-desc">${esc(i.description)}</p>
+          ${i.profileStatus?.warning ? `<div class="int-warning">⚠ ${esc(i.profileStatus.warning)}</div>` : ''}
           ${endpoints ? `<div class="int-endpoints">${endpoints}</div>` : ''}
           <div class="int-actions">
             <a class="btn btn-secondary btn-sm" href="#/${esc(i.id)}">Open</a>
@@ -246,6 +248,7 @@ const SB = (() => {
       if (msg.source === 'hub') {
         if (msg.type === 'integrations') setIntegrations(msg.integrations);
         else if (msg.type === 'log') appendLog(msg.entry);
+        else if (msg.type === 'update') { update = msg.update; renderUpdate(); }
         return;
       }
       try { panels[msg.source]?.def?.onMessage?.(msg); } catch (err) { console.error(err); }
@@ -384,14 +387,136 @@ const SB = (() => {
 
   function renderProfiles() {
     const withProfile = integrations.filter((i) => i.profile);
-    $('profileList').innerHTML = withProfile.length ? withProfile.map((i) => `
+    $('profileList').innerHTML = withProfile.length ? withProfile.map((i) => {
+      const p = i.profileStatus || {};
+      return `
       <div class="setting-row">
         <div>
-          <div class="setting-name">${esc(i.name)}</div>
+          <div class="setting-name">${esc(i.name)}${p.version ? `<span class="version-tag">v${esc(p.version)}</span>` : ''}</div>
           <div class="setting-desc mono">${esc(i.profile)}</div>
+          ${profileUse(p)}
         </div>
         <a class="btn btn-ghost btn-sm" href="/api/hub/integrations/${esc(i.id)}/profile" download>⬇ Download</a>
-      </div>`).join('') : '<div class="setting-desc">No integration ships a Savant profile.</div>';
+      </div>`;
+    }).join('') : '<div class="setting-desc">No integration ships a Savant profile.</div>';
+  }
+
+  // What Savant runs, from the profiles' own version reports (core/profiles.js).
+  function profileUse(p) {
+    const sources = p.sources || [];
+    if (!p.reports) return '<div class="setting-desc profile-use">This profile doesn\'t report its version.</div>';
+    if (!sources.length) return '<div class="setting-desc profile-use">Savant hasn\'t reported using it.</div>';
+    const label = (s) => ({
+      current: `${s.version} ✓`,
+      older: `${s.version}, older`,
+      newer: `${s.version}, newer`,
+      unreported: 'an older version',
+      pending: 'waiting for its report',
+    }[s.state] || s.state);
+    const warn = sources.some((s) => ['older', 'newer', 'unreported'].includes(s.state));
+    return `<div class="setting-desc profile-use${warn ? ' warn' : ''}">Savant runs: `
+      + sources.map((s) => `${esc(label(s))} (${esc(s.device)})`).join(' · ') + '</div>';
+  }
+
+  // ── Updates ──────────────────────────────────────────────────────────────
+
+  let updateLogTimer = null;
+
+  function renderUpdate() {
+    const u = update;
+    if (!u) return;
+    const latest = u.latest;
+
+    const chip = $('updateChip');
+    chip.hidden = !u.available || Boolean(u.installing);
+    if (u.available) chip.innerHTML = `Update<span class="wide-only"> available</span> · v${esc(latest.version)}`;
+
+    let title = `v${u.current}`;
+    let desc;
+    if (u.installing) {
+      title = `Updating to v${u.installing.version}…`;
+      desc = 'SplycedBoard restarts on the new version when the installer finishes, in about a minute. This page reloads by itself.';
+    } else if (u.available) {
+      title = `v${latest.version} is available`;
+      desc = `This is v${esc(u.current)}. Released ${esc(new Date(latest.publishedAt).toLocaleDateString())} · `
+        + `<a href="${esc(latest.url)}" target="_blank" rel="noopener">What's new</a>`;
+      if (!u.canInstall) desc += '. Only the background service can install it; this copy runs in a terminal.';
+    } else if (u.checking) {
+      desc = 'Checking GitHub…';
+    } else if (u.error) {
+      desc = esc(u.error);
+    } else if (latest) {
+      title = `v${u.current} is up to date`;
+      desc = `Checked ${esc(timeAgo(u.checkedAt))}.`;
+    } else {
+      desc = `Checks GitHub (${esc(u.repo)}) for new releases twice a day.`;
+    }
+    $('updateTitle').textContent = title;
+    $('updateDesc').innerHTML = desc;
+
+    const install = $('updateInstallBtn');
+    install.hidden = !u.available || Boolean(u.installing);
+    install.disabled = !u.canInstall;
+    if (u.available) install.textContent = `Update to v${latest.version}`;
+    $('updateCheckBtn').disabled = u.checking || Boolean(u.installing);
+
+    const result = $('updateResult');
+    result.hidden = !u.result || Boolean(u.installing);
+    if (u.result) {
+      result.className = `alert show ${u.result.ok ? 'alert-success' : 'alert-error'}`;
+      result.textContent = u.result.message;
+    }
+
+    // While installing, and after a failure, show what the installer printed.
+    const showLog = Boolean(u.installing) || u.result?.ok === false;
+    $('updateLog').hidden = !showLog;
+    clearInterval(updateLogTimer);
+    updateLogTimer = null;
+    if (showLog) {
+      loadUpdateLog();
+      if (u.installing) updateLogTimer = setInterval(loadUpdateLog, 2000);
+    }
+  }
+
+  async function loadUpdateLog() {
+    try {
+      const text = await api('GET', '/api/hub/update/log');
+      const view = $('updateLog');
+      view.textContent = text || 'Starting the installer…';
+      view.scrollTop = view.scrollHeight;
+    } catch { /* the service is restarting */ }
+  }
+
+  function initUpdates() {
+    $('updateCheckBtn').addEventListener('click', async () => {
+      try {
+        update = await api('POST', '/api/hub/update/check');
+        renderUpdate();
+        if (!update.available) toast(`v${update.current} is up to date`);
+      } catch (err) {
+        toast(err.message, 'error');
+        refreshUpdate();
+      }
+    });
+    $('updateInstallBtn').addEventListener('click', async () => {
+      const version = update?.latest?.version;
+      if (!confirm(`Update SplycedBoard to v${version}?\n\nIntegrations stop for about a minute while it installs. Settings and pairing are kept.`)) return;
+      try {
+        update = await api('POST', '/api/hub/update/install');
+        renderUpdate();
+        toast(`Updating to v${version}…`);
+      } catch (err) {
+        toast(err.message, 'error');
+        refreshUpdate();
+      }
+    });
+  }
+
+  async function refreshUpdate() {
+    try {
+      update = await api('GET', '/api/hub/update');
+      renderUpdate();
+    } catch { /* not reachable right now */ }
   }
 
   function initSettings() {
@@ -420,9 +545,17 @@ const SB = (() => {
 
   async function refreshHub() {
     const snapshot = await api('GET', '/api/hub');
+    // Back after an update: this page is the old version's, so load the new one.
+    if (app && snapshot.app.version !== app.version) {
+      location.reload();
+      return snapshot;
+    }
     app = snapshot.app;
     settings = snapshot.settings;
+    update = snapshot.update;
     renderSettings();
+    renderUpdate();
+    $('updateCheckBtn').closest('.card').hidden = !update;
     return snapshot;
   }
 
@@ -430,6 +563,7 @@ const SB = (() => {
     $('menuBtn').addEventListener('click', () => setMenuOpen(!$('sidebar').classList.contains('open')));
     initLogs();
     initSettings();
+    initUpdates();
 
     let snapshot;
     for (;;) {

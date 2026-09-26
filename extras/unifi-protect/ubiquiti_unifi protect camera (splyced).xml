@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.2">
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.3">
     <notes>
         Any camera adopted in UniFi Protect (G6, G5, G4, AI...), streamed from the Protect console
         (the UniFi OS console or NVR), not from the camera itself. One component per camera.
@@ -14,7 +14,8 @@
         3) In Blueprint, add one of these components per camera. Savant takes a camera's address
            from its camera table (Camera, Logical Component, IP Address, User Login, Password,
            Enable H.264), not from the network connection. In that table, for this camera:
-             IP Address     the console's address, port 7447 and the token:
+             IP Address     the console's address, port 7447 and the token, WITHOUT rtsp://
+                            (Savant adds it):
                             192.168.5.1:7447/Esg1HhMEGKeVBUnU
              User Login     empty
              Password       empty (Protect's RTSP doesn't ask for them)
@@ -26,6 +27,7 @@
         cameras, use the camera's Medium or Low stream token instead.
 
 		====================== Change Log ==================
+		Version: 1.3 Change: Stream path "/", so Blueprint builds rtsp://IP Address exactly (the "?" path came out as "/?", which Protect refuses). Notes: no rtsp:// in the IP Address.  Risk: Low Importance: Critical
 		Version: 1.2 Change: Notes: the camera table's fields, with Enable H.264 on.  Risk: Low Importance: Helpful
 		Version: 1.1 Change: Notes: set the camera's stream to "Standard" in Protect's Recording Manager (H.264; "Enhanced" is H.265, which Savant can't play).  Risk: Low Importance: Critical
 		Version: 1.0 Change: First version: RTSP from the UniFi Protect console, with each camera's stream token in the Security Camera data table.  Risk: Low Importance: Critical
@@ -47,12 +49,14 @@
         <implementation>
             <internal name_on_component="Security Camera"></internal>
         </implementation>
-        <!-- Blueprint builds rtsp://<IP Address><path>. The IP Address field carries the
-             console's address, port 7447 and the camera's token, so the path adds nothing:
-             "?" keeps it non-empty (Protect ignores it); a "/" there would break the address. -->
+        <!-- Blueprint builds "rtsp://" + the IP Address joined to this path the way macOS joins file
+             paths: a "/" goes between them and "//" collapses to "/". The IP Address carries the
+             console's address, port 7447 and the camera's token, so the path must add nothing:
+             "/" joins to nothing. ("?" came out as "/?", which Protect refuses, and "rtsp://"
+             typed into the IP Address comes out as "rtsp://rtsp:/…".) -->
         <image_access>
-            <image_format format="h264" resolution="high" is_multiview_default="no" is_default="yes">?</image_format>
-            <image_format format="h264" resolution="low" is_multiview_default="yes" is_default="no">?</image_format>
+            <image_format format="h264" resolution="high" is_multiview_default="no" is_default="yes">/</image_format>
+            <image_format format="h264" resolution="low" is_multiview_default="yes" is_default="no">/</image_format>
         </image_access>
         <resource_component_actions resource_type="ENV_SECURITYCAMERA_SOURCE">
         </resource_component_actions>

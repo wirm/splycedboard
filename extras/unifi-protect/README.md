@@ -24,7 +24,7 @@ camera.
 
    | | |
    |---|---|
-   | IP Address | the console's address, port **7447**, and its token: `192.168.5.1:7447/Esg1HhMEGKeVBUnU` |
+   | IP Address | the console's address, port **7447**, and its token, **without** `rtsp://` (Savant adds it): `192.168.5.1:7447/Esg1HhMEGKeVBUnU` |
    | User Login, Password | empty |
    | Enable H.264 | on: this profile's streams are H.264 only |
 4. Upload the configuration.
@@ -41,9 +41,11 @@ camera.
   and `?enableSrtp` encrypts the video too) and plain on 7447. Blueprint only builds `rtsp://`
   addresses, and `?enableSrtp` switches on SRTP even on 7447, so neither works in Savant.
   Plain RTSP on 7447 needs no login; the token is the only key.
-- **The path is `?`.** Blueprint puts the profile's path right after the IP Address field. Protect
-  refuses `…/token/` (a trailing slash) but ignores an empty query, so `?` keeps the path
-  from being empty without changing the address.
+- **The path is `/`.** Blueprint builds `rtsp://` + the IP Address joined to the profile's path
+  the way macOS joins file paths: it puts a `/` between them and collapses `//`. Joining `/`
+  adds nothing, so the address comes out exactly as typed. (Version 1.0–1.2 used `?`, which
+  came out as `…/token/?`: Protect refuses it. And `rtsp://` typed into the IP Address comes
+  out as `rtsp://rtsp:/…`.)
 - **Standard, not Enhanced.** Savant's camera profiles play H.264. Protect's Recording Manager
   streams a camera set to Enhanced as H.265 (same token, different video), which Savant can't
   show; Standard is H.264.
@@ -55,5 +57,7 @@ camera.
 Against a Protect console on the Beta Host's network (192.168.5.1): `rtsp://192.168.5.1:7447/<token>`
 and `…/<token>?` answer; `…/<token>/` doesn't; with `?enableSrtp` the stream description carries
 SRTP keys (`a=crypto`); a login in the address is ignored; set to Standard, a G6 streams
-H.264 (Enhanced: H.265). Still to check in Savant: that Blueprint builds `rtsp://192.168.5.1:7447/<token>?`
-from the IP Address field, and the picture in the Savant app.
+H.264 (Enhanced: H.265). On the Beta Host, Blueprint compiled version 1.2 with
+`rtsp://192.168.5.1:7447/<token>` typed in as `rtsp://rtsp:/192.168.5.1:7447/<token>/?`, which is
+how the joining above was found. Still to check in Savant: 1.3 with the address typed
+without `rtsp://`, and the picture in the Savant app.

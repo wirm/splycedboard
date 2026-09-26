@@ -792,6 +792,17 @@ class LeapController extends EventEmitter {
     return leds;
   }
 
+  /** Which keypad and button number a button href is (Savant's Address1 and Address2). */
+  findButton(buttonHref) {
+    if (!buttonHref) return null;
+    for (const bg of this.buttonGroups.values()) {
+      for (const btn of bg.buttons) {
+        if (btn.href === buttonHref) return { deviceId: bg.deviceId, buttonNumber: btn.number };
+      }
+    }
+    return null;
+  }
+
   /** Reverse lookup: which device/button an LED href belongs to. */
   findLedButton(ledHref) {
     if (!ledHref) return null;

@@ -18,6 +18,7 @@
  *
  * Feedback (bridge → Savant):
  *   ~OUTPUT,{zone},1,{level}.    ~SHADEGRP,{zone},1,{level}.    ~DEVICE,{device},{button},09,{01|00}
+ *   ~DEVICE,{device},{button},3 | 4 | 5 | 6                     button press | release | hold | multi-tap
  *   ~COLORSET,{zone},1,{level},{R},{G},{B},{W}                  ~COLORTEMP,{zone},1,{0-100}
  */
 const net = require('net');
@@ -61,6 +62,12 @@ class TelnetBridge {
   ledChanged(ledHref, state) {
     const btn = this.getController()?.findLedButton(ledHref);
     if (btn) this._broadcast(`~DEVICE,${btn.deviceId},${btn.buttonNumber},09,${state === 'On' ? '01' : '00'}`);
+  }
+
+  /** A keypad button event, numbered as the HomeWorks QS protocol numbers them. */
+  buttonEvent(deviceId, buttonNumber, event) {
+    const action = { Press: 3, Release: 4, Hold: 5, LongHold: 5, MultiTap: 6 }[event];
+    if (action) this._broadcast(`~DEVICE,${deviceId},${buttonNumber},${action}`);
   }
 
   /** Push every known zone level — on connect, and whenever the controller (re)loads inventory. */

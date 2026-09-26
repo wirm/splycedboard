@@ -121,8 +121,23 @@ test('feedback: keypad LEDs follow the levels, keyed device_LED, and change when
   const night = (await hub.get('/api/lutron/inventory')).json.buttonGroups.find((g) => g.deviceId === 501).buttons.find((b) => b.number === 4);
   await hub.post('/api/lutron/button/press', { href: night.href });
   await hub.post('/api/lutron/button/release', { href: night.href });
-  const next = await h.waitFor(async () => { const a = await poll(); return Object.keys(a).length && a; }, { what: 'LED feedback' });
+  const next = await h.waitFor(async () => { const a = await poll(); return 'k0' in a && a; }, { what: 'LED feedback' });
   assert.deepEqual(ledsIn(next), { '501_804': 1 });
+});
+
+test('feedback: keypad button events reach Savant for triggers, each followed by None', async () => {
+  const poll = async () => (await hub.get('/api/lutron/feedback')).json;
+  while (Object.keys(await poll()).length) { /* catch up */ }
+  const buttonsIn = (answer) => [...new Map(Object.keys(answer).filter((k) => /^b\d+$/.test(k)).map((k) => [answer[k], answer[`e${k.slice(1)}`]]))];
+  const night = (await hub.get('/api/lutron/inventory')).json.buttonGroups.find((g) => g.deviceId === 501).buttons.find((b) => b.number === 4);
+  await hub.post('/api/lutron/button/press', { href: night.href }); // a tap: the processor reports Press, then Release
+  const seen = [];
+  await h.waitFor(async () => {
+    const a = await poll();
+    if ('b0' in a) seen.push(...buttonsIn(a));
+    return seen.length >= 4;
+  }, { what: 'button events' });
+  assert.deepEqual(seen.slice(0, 4), [['501_4', 'Press'], ['501_4', 'None'], ['501_4', 'Release'], ['501_4', 'None']]);
 });
 
 test('zone, area, shade and scene endpoints drive the processor', async () => {
@@ -277,6 +292,8 @@ test('telnet bridge: initial state, commands, queries and LED feedback', async (
     client.send('?OUTPUT,9999'); // unknown zone: ignored, must not crash the service
     client.send('#DEVICE,501,1,3');
     await client.waitForLine('~DEVICE,501,1,09,01');
+    await client.waitForLine('~DEVICE,501,1,3'); // the press and release themselves, as HomeWorks QS numbers them
+    await client.waitForLine('~DEVICE,501,1,4');
 
     client.send('QNET> #output,101,1,45');
     await client.waitForLine('~OUTPUT,101,1,45.');

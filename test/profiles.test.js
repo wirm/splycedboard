@@ -11,7 +11,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { manifests } = require('../SplycedBoard/src/integrations');
 const { compareVersions } = require('../SplycedBoard/src/core/profiles');
-const { SLOTS, LED_SLOTS } = require('../SplycedBoard/src/integrations/lutron/feedback');
+const { SLOTS, LED_SLOTS, BUTTON_SLOTS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
 const ROOT = path.join(__dirname, '..');
 const PROFILES = path.join(ROOT, 'SplycedBoard', 'profiles');
@@ -201,6 +201,18 @@ test('the Lutron profile reads every feedback slot SplycedBoard sends, levels an
   const lights = [...leds.matchAll(/<update_state_variable name="IsCurrentLEDOn_\*"[^>]*wildcard_source_name="FeedbackLEDKey(\d+)">FeedbackLEDOn(\d+)</g)];
   assert.deepEqual(lights.map((m) => Number(m[1])), allLeds);
   assert.ok(lights.every((m) => m[1] === m[2]), "each LED slot's key gets its own state");
+
+  // Button events: "<device>_<button>" into ButtonEvent_*, declared so Savant writes them
+  const buttons = xml.match(/<status_message name="ButtonFeedback">([\s\S]*?)<\/status_message>/)?.[1];
+  assert.ok(buttons, 'no ButtonFeedback status message');
+  const allButtons = Array.from({ length: BUTTON_SLOTS }, (_, i) => i);
+  assert.deepEqual([...buttons.matchAll(/<values path="\/none\/b(\d+)"/g)].map((m) => Number(m[1])), allButtons, 'button key slots');
+  assert.deepEqual([...buttons.matchAll(/<values path="\/none\/e(\d+)"/g)].map((m) => Number(m[1])), allButtons, 'button event slots');
+  const events = [...buttons.matchAll(/<update_state_variable name="ButtonEvent_\*"[^>]*wildcard_source_name="FeedbackButtonKey(\d+)">FeedbackButtonEvent(\d+)</g)];
+  assert.deepEqual(events.map((m) => Number(m[1])), allButtons);
+  assert.ok(events.every((m) => m[1] === m[2]), "each button slot's key gets its own event");
+  assert.match(xml, /<dynamic_state_variable name="ButtonEvent"[^>]*state_center_type="string"/, 'ButtonEvent is declared, as a string');
+  for (const i of allButtons) assert.match(xml, new RegExp(`<state_variable name="FeedbackButtonEvent${i}"`), `FeedbackButtonEvent${i} is declared`);
   assert.match(xml, /<action name="FeedbackStart">[\s\S]*?feedback<\/command_string>[\s\S]*?\?start=1[\s\S]*?period_ms="0"/, 'FeedbackStart asks for everything when Savant starts');
 });
 

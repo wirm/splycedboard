@@ -901,7 +901,8 @@
     const key = (b, cls = '') => {
       if (!b) return '<span class="kp-key kp-blank" aria-hidden="true"></span>';
       const label = b.role === 'raise' ? '▲' : b.role === 'lower' ? '▼' : (b.engraving || b.name || `Button ${b.number}`);
-      const title = `Button ${b.number ?? b.id}${b.role !== 'button' ? ` (${b.role})` : ''}`;
+      const trigger = bg.deviceId != null && b.number != null ? ` · Savant trigger: ButtonEvent_${bg.deviceId}_${b.number}` : '';
+      const title = `Button ${b.number ?? b.id}${b.role !== 'button' ? ` (${b.role})` : ''}${trigger}`;
       return `<button class="kp-key ${cls}${b.ledState === 'On' ? ' is-on' : ''}" type="button" title="${esc(title)}"
           data-button="${esc(b.href)}" ${b.ledHref ? `data-led="${esc(b.ledHref)}"` : ''}
           onpointerdown="Lutron.pressButton('${esc(b.href)}')" onpointerup="Lutron.releaseButton('${esc(b.href)}')"
@@ -921,7 +922,8 @@
     }).join('');
     const addresses = bg.buttons.filter((b) => b.number != null).map((b) => `
       <tr><td>${esc(b.role === 'button' ? (b.engraving || b.name) : b.role === 'raise' ? 'Raise' : 'Lower')}</td>
-        <td>${esc(String(bg.deviceId ?? '—'))}</td><td>${esc(String(b.number))}</td><td>${esc(String(b.ledId ?? '—'))}</td></tr>`).join('');
+        <td>${esc(String(bg.deviceId ?? '—'))}</td><td>${esc(String(b.number))}</td><td>${esc(String(b.ledId ?? '—'))}</td>
+        <td><code>ButtonEvent_${esc(String(bg.deviceId ?? '—'))}_${esc(String(b.number))}</code></td></tr>`).join('');
     return `
       <div class="kp-card">
         <div class="kp-head">
@@ -932,10 +934,11 @@
         <details class="kp-addresses">
           <summary>Savant addresses</summary>
           <table>
-            <thead><tr><th>Button</th><th>Address1</th><th>Address2</th><th>Address3</th></tr></thead>
+            <thead><tr><th>Button</th><th>Address1</th><th>Address2</th><th>Address3</th><th>Trigger state</th></tr></thead>
             <tbody>${addresses}</tbody>
           </table>
-          <div class="kp-addresses-note">Keypad Button rows: device, button number, LED.</div>
+          <div class="kp-addresses-note">Keypad Button rows: device, button number, LED. Trigger state (profile 1.16+): Press,
+            Release, Hold or MultiTap when the button is used, then None, for Savant triggers.</div>
         </details>
       </div>`;
   }

@@ -6,7 +6,7 @@
 require('./support/harness');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ZoneFeedback, SLOTS, LED_SLOTS, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
+const { ZoneFeedback, SLOTS, LED_SLOTS, BUTTON_SLOTS, BUTTON_IDLE, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
 function setup(levels = { 101: 75, 102: 0, 201: 40 }, leds = []) {
   const controller = {
@@ -138,3 +138,63 @@ test('Savant saying it just started gets everything again at once', () => {
   assert.deepEqual(feedback.poll('10.0.0.5'), {});
   assert.deepEqual(levels(feedback.poll('10.0.0.5', { start: true })), { 101: 75, 102: 0, 201: 40 });
 });
+
+/** The button → event pairs in an answer, in slot order, and a check that every slot is filled. */
+function buttonsIn(answer) {
+  const out = [];
+  for (let i = 0; i < BUTTON_SLOTS; i++) {
+    assert.ok(`b${i}` in answer && `e${i}` in answer, `button slot ${i} is filled`);
+    out.push([answer[`b${i}`], answer[`e${i}`]]);
+  }
+  return [...new Map(out).entries()];
+}
+
+test('button events go out first, keyed device_button, and back to None on the next poll', () => {
+  const { feedback, set } = setup();
+  feedback.poll('10.0.0.5'); // the levels
+  set(101, 20);
+  feedback.buttonEvent(501, 6, 'Release');
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Release']], 'ahead of the level that changed');
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', BUTTON_IDLE]], 'then None, so the next Release is a change');
+  assert.deepEqual(levels(feedback.poll('10.0.0.5')), { 101: 20 }, 'then the level');
+  assert.deepEqual(feedback.poll('10.0.0.5'), {});
+});
+
+test('one event per button per answer, so Savant sees each one; other buttons ride along', () => {
+  const { feedback } = setup();
+  feedback.poll('10.0.0.5');
+  feedback.buttonEvent(501, 6, 'Release');
+  feedback.buttonEvent(501, 6, 'MultiTap');
+  feedback.buttonEvent(502, 1, 'Press');
+  const seen = [];
+  for (let answer = feedback.poll('10.0.0.5'); Object.keys(answer).length; answer = feedback.poll('10.0.0.5')) seen.push(buttonsIn(answer));
+  assert.deepEqual(seen, [
+    [['501_6', 'Release'], ['502_1', 'Press']],
+    [['501_6', BUTTON_IDLE], ['502_1', BUTTON_IDLE]],
+    [['501_6', 'MultiTap']],
+    [['501_6', BUTTON_IDLE]],
+  ]);
+});
+
+test(`more than ${BUTTON_SLOTS} buttons at once go out ${BUTTON_SLOTS} at a time`, () => {
+  const { feedback } = setup();
+  feedback.poll('10.0.0.5');
+  for (let b = 1; b <= BUTTON_SLOTS + 2; b++) feedback.buttonEvent(501, b, 'Release');
+  const first = buttonsIn(feedback.poll('10.0.0.5'));
+  assert.equal(first.length, BUTTON_SLOTS);
+  const second = buttonsIn(feedback.poll('10.0.0.5'));
+  assert.deepEqual(second.filter(([, e]) => e === 'Release').map(([k]) => k), ['501_9', '501_10'], 'the rest go ahead of the resets');
+  assert.equal(second.filter(([, e]) => e === BUTTON_IDLE).length, BUTTON_SLOTS - 2, 'resets fill what\'s left');
+});
+
+test('button events only go to hosts asking now: a host that starts later gets none from before', () => {
+  const { feedback, clock } = setup();
+  feedback.poll('10.0.0.5');
+  feedback.buttonEvent(501, 6, 'Release');
+  assert.ok('z0' in feedback.poll('10.0.0.9'), 'a new host gets the levels, not the old press');
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Release']]);
+  clock.t += IDLE_MS + 1;
+  feedback.buttonEvent(501, 6, 'Release');
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', BUTTON_IDLE]], 'nor one that stopped asking: only the reset it was owed');
+});
+

@@ -110,7 +110,16 @@ class LutronIntegration {
       broadcast('ledUpdate', e);
     });
     controller.on('thermostatUpdate', ({ thermostat }) => broadcast('thermostatUpdate', { thermostat }));
-    controller.on('buttonEvent', (e) => broadcast('buttonEvent', e));
+    controller.on('buttonEvent', (e) => {
+      // To Savant too, for triggers: the processor tells nobody what a button's programming did
+      // (variables aren't served over LEAP), but it does tell when the button was pressed.
+      const btn = controller.findButton(e.buttonHref);
+      if (btn) {
+        this.feedback.buttonEvent(btn.deviceId, btn.buttonNumber, e.event);
+        this.telnet.buttonEvent(btn.deviceId, btn.buttonNumber, e.event);
+      }
+      broadcast('buttonEvent', e);
+    });
   }
 
   _disconnect() {

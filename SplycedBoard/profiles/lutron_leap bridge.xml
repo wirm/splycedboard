@@ -4,7 +4,7 @@
     manufacturer="Lutron"
     model="LEAP Bridge"
     device_class="Lighting_controller"
-    rpm_xml_version="1.15"
+    rpm_xml_version="1.16"
     minimum_component_engine_version="7.2">
     <notes>
         Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
@@ -40,7 +40,17 @@
           Button rows. When Savant starts, FeedbackStart asks for everything again and
           each load is asked for its level (QueryDimmerLevel, read by ZoneLevel).
 
+        Button events, for Savant triggers:
+          ButtonFeedback sets ButtonEvent_(device)_(button) to what a keypad button did
+          (Press, Release, Hold, MultiTap: whichever the processor reports for that button's
+          programming), then back to None on the next poll, so each event is a change.
+          Device and button are Address1 and Address2 on SplycedBoard's Keypads tab, e.g.
+          ButtonEvent_501_6. Trigger on it being equal to Release (or MultiTap…).
+
         ====================== Change Log ======================
+        Version 1.16 Add: keypad button events for Savant triggers. SplycedBoard's feedback answers carry
+                             button events first, and the ButtonFeedback status message sets
+                             ButtonEvent_(device)_(button) to Press, Release, Hold or MultiTap, then None.
         Version 1.15 Add: keypad LED feedback. SplycedBoard's feedback answers carry LEDs too, and the
                              LEDFeedback status message lights IsCurrentLEDOn_(device)_(LED), the state a
                              Keypad Button row shows (Address1 = device, Address2 = button, Address3 = LED,
@@ -235,6 +245,24 @@
         <state_variable name="FeedbackLEDOn14" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn14" state_center_type="boolean"></state_variable>
         <state_variable name="FeedbackLEDKey15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey15" state_center_type="string"></state_variable>
         <state_variable name="FeedbackLEDOn15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn15" state_center_type="boolean"></state_variable>
+        <!-- Keypad button events for Savant triggers: ButtonFeedback writes ButtonEvent_(device)_(button). -->
+        <dynamic_state_variable name="ButtonEvent" owning_logical_component="Lighting_controller" state_center_binding="ButtonEvent" state_center_type="string">None</dynamic_state_variable>
+        <state_variable name="FeedbackButtonKey0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey0" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent0" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey1" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent1" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey2" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent2" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent2" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey3" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent3" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent3" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey4" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent4" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent4" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey5" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent5" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent5" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey6" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent6" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent6" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonKey7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey7" state_center_type="string"></state_variable>
+        <state_variable name="FeedbackButtonEvent7" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent7" state_center_type="string"></state_variable>
     </state_variable_list>
 
     <logical_component logical_component_name="Lighting_controller">
@@ -650,6 +678,72 @@
                             <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey13">FeedbackLEDOn13</update_state_variable>
                             <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey14">FeedbackLEDOn14</update_state_variable>
                             <update_state_variable name="IsCurrentLEDOn_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackLEDKey15">FeedbackLEDOn15</update_state_variable>
+                        </action>
+                    </actions>
+                </run_elements>
+            </status_message>
+            <status_message name="ButtonFeedback">
+                <root_object name="none" matches_required="all" format="json">
+                    <values path="/none/b0" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey0" type="string"></update>
+                    </values>
+                    <values path="/none/e0" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent0" type="string"></update>
+                    </values>
+                    <values path="/none/b1" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey1" type="string"></update>
+                    </values>
+                    <values path="/none/e1" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent1" type="string"></update>
+                    </values>
+                    <values path="/none/b2" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey2" type="string"></update>
+                    </values>
+                    <values path="/none/e2" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent2" type="string"></update>
+                    </values>
+                    <values path="/none/b3" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey3" type="string"></update>
+                    </values>
+                    <values path="/none/e3" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent3" type="string"></update>
+                    </values>
+                    <values path="/none/b4" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey4" type="string"></update>
+                    </values>
+                    <values path="/none/e4" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent4" type="string"></update>
+                    </values>
+                    <values path="/none/b5" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey5" type="string"></update>
+                    </values>
+                    <values path="/none/e5" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent5" type="string"></update>
+                    </values>
+                    <values path="/none/b6" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey6" type="string"></update>
+                    </values>
+                    <values path="/none/e6" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent6" type="string"></update>
+                    </values>
+                    <values path="/none/b7" matches_required="at_least_one">
+                        <update state="FeedbackButtonKey7" type="string"></update>
+                    </values>
+                    <values path="/none/e7" matches_required="at_least_one">
+                        <update state="FeedbackButtonEvent7" type="string"></update>
+                    </values>
+                </root_object>
+                <run_elements>
+                    <actions>
+                        <action name="ApplyButtonFeedback">
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey0">FeedbackButtonEvent0</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey1">FeedbackButtonEvent1</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey2">FeedbackButtonEvent2</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey3">FeedbackButtonEvent3</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey4">FeedbackButtonEvent4</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey5">FeedbackButtonEvent5</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey6">FeedbackButtonEvent6</update_state_variable>
+                            <update_state_variable name="ButtonEvent_*" update_type="set" update_source="state_variable" wildcard_source="state_variable" wildcard_format="%@" wildcard_source_name="FeedbackButtonKey7">FeedbackButtonEvent7</update_state_variable>
                         </action>
                     </actions>
                 </run_elements>
@@ -1802,7 +1896,7 @@
                     <command response_required="no">
                         <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
                         <parameter_list>
-                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.15]]></parameter>
+                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.16]]></parameter>
                         </parameter_list>
                     </command>
                 </command_interface>

@@ -98,6 +98,32 @@ app, by a scene, or on SplycedBoard's dashboard. This needs profile 1.13 or late
 - **Not yet covered.** The color or color temperature of Ketra and Rania loads (DMX and CCT
   Slider rows).
 
+### Button events: triggering Savant from Lutron keypads
+
+From profile 1.16, Savant hears each keypad button being used, so a Savant trigger can react
+the moment a Lutron button is pressed: for instance, one whose programming changes a Lutron
+variable.
+
+- **The state.** Each button has `ButtonEvent_<device>_<button>`, e.g. `ButtonEvent_501_6`
+  (Address1 and Address2 on the Keypads tab, whose "Savant addresses" table lists every
+  button's trigger state).
+- **What it holds.** What the button just did, as the processor reports it for that button's
+  programming: `Press`, `Release`, `Hold` or `MultiTap`. A toggle button, for instance,
+  reports `Release`, and `MultiTap` for a double tap. On the next poll it goes back to `None`,
+  so the same press twice is two changes.
+- **In Blueprint.** Add a state trigger on
+  `<your Lutron component>.Lighting_controller.ButtonEvent_501_6` being equal to `Release`
+  (or `MultiTap`…), and have it run what should happen.
+- **Timing.** Button events go ahead of level and LED feedback, so Savant sees them within half
+  a second; each button's events go out one per poll, in order.
+- **Telnet bridge.** The HomeWorks QS–style telnet port sends them too: `~DEVICE,<device>,<button>,3`
+  (press), `4` (release), `5` (hold), `6` (multi-tap).
+
+**Lutron variables themselves can't be read.** A HomeWorks QSX processor doesn't serve
+variables over LEAP (checked on firmware 26.06: every variable resource is "not supported",
+even for an Admin session), and LEAP doesn't say what a button's programming sets. So Savant
+can react to the button that changes a variable, but can't see the variable's state.
+
 ### Lighting data table
 
 **Address1 = LEAP Zone ID.** Every zone's ID is shown on the **Loads** tab. They're stable

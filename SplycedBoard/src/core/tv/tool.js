@@ -229,9 +229,24 @@ class TvTool {
         this.log.info(`Added ${c.name} (${c.address}) from Blueprint's configuration${key ? '' : `, no ${this.driver.keyLabel} stored there`}`);
       }
       // Blueprint's address is the one Savant uses.
-      if (tv.address !== c.address) tv.address = c.address;
-      if (!tv.mac && c.mac) tv.mac = lan.normalizeMac(c.mac);
-      if (!tv.key && key) tv.key = key;
+      if (tv.address !== c.address) {
+        tv.address = c.address;
+        this.driver.close?.(tv);
+        changed = true;
+      }
+      if (!tv.mac && c.mac) {
+        tv.mac = lan.normalizeMac(c.mac);
+        changed = true;
+      }
+      // Take Blueprint's key when there's none here, or when Blueprint's changed since the last
+      // look (someone pasted a new one in). A different key kept here is flagged instead.
+      const before = tv.blueprint ? tv.blueprint.key : undefined;
+      if (key && key !== tv.key && (!tv.key || (before !== undefined && key !== before))) {
+        tv.key = key;
+        tv.keyCheck = null;
+        this.driver.close?.(tv);
+        changed = true;
+      }
       if (JSON.stringify(tv.blueprint) !== JSON.stringify(link)) {
         tv.blueprint = link;
         changed = true;

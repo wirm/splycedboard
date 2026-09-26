@@ -37,7 +37,7 @@ const profile = (manufacturer, model, body) => `<?xml version="1.0" encoding="UT
 </component>
 `;
 
-function savantRuns({ samsungToken = '' } = {}) {
+function savantRuns({ samsungToken = '', livingRoomAddress = '192.0.2.10' } = {}) {
   fs.rmSync(CONFIG, { recursive: true, force: true });
   fs.mkdirSync(path.join(CONFIG, 'componentProfiles'), { recursive: true });
   const rows = [
@@ -62,7 +62,7 @@ function savantRuns({ samsungToken = '' } = {}) {
     RPMComponentConnectionSinkInfo: { RPMComponentIdentifier: sink, RPMComponentConnectorIdentifier: 'LAN' },
   });
   plist(path.join(CONFIG, 'componentConnections.plist'), [
-    cable('Living Room TV', '192.0.2.10', '8C:79:F5:00:00:01'),
+    cable('Living Room TV', livingRoomAddress, '8C:79:F5:00:00:01'),
     cable('Bedroom TV', '192.0.2.11'),
     cable('Den TV', '192.0.2.12'),
     cable('Den Projector', '192.0.2.13'),
@@ -400,6 +400,14 @@ test('TVs in the Blueprint configuration are listed with Blueprint\'s key, and a
     // A different token here than in Blueprint: Savant uses Blueprint's
     const changed = (await hub.put(`/api/samsungtv/tvs/${living.id}`, { key: 'OTHER' })).json;
     assert.match(changed.warnings.join(' '), /Blueprint has a different AccessToken/);
+
+    // Someone pastes a new token into Blueprint and moves the TV: both are taken.
+    await new Promise((r) => setTimeout(r, 20));
+    savantRuns({ samsungToken: 'BP-TOKEN-2', livingRoomAddress: '192.0.2.20' });
+    const moved = (await hub.get('/api/samsungtv/tvs')).json.tvs[0];
+    assert.deepEqual([moved.id, moved.address, moved.key, moved.warnings], [living.id, '192.0.2.20', 'BP-TOKEN-2', []]);
+    const saved = h.readJson(path.join(h.DATA_DIR, 'samsungtv', 'settings.json')).tvs[0];
+    assert.deepEqual([saved.address, saved.key], ['192.0.2.20', 'BP-TOKEN-2'], 'and kept');
   } finally {
     fs.rmSync(CONFIG, { recursive: true, force: true });
     await hub.post('/api/samsungtv/blueprint');

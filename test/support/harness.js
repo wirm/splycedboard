@@ -10,6 +10,8 @@ const path = require('path');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'splycedboard-test-'));
 process.env.SPLYCEDBOARD_HOME = HOME;
 process.env.SPLYCEDBOARD_LOG_SILENT = '1';
+// No Savant configuration unless a test makes one: never this Mac's own Blueprint files.
+process.env.SPLYCEDBOARD_SAVANT_CONFIG = path.join(HOME, 'userConfig.rpmConfig');
 delete process.env.SPLYCEDBOARD_LOG_DIR;
 delete process.env.SPLYCEDBOARD_DATA_DIR;
 

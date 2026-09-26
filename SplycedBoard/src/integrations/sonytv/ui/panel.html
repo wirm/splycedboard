@@ -1,0 +1,33 @@
+<div class="page-body tv-tool">
+  <div class="page-head stars">
+    <h1>Sony TV</h1>
+    <p>Find Sony BRAVIA TVs on the network, check the Pre-Shared Key set on each, and work the TV like a remote.
+      Savant's Sony profiles send the key 1234, so that's what the TV needs. TVs in the Blueprint configuration this host
+      runs are listed with the key their profile sends.</p>
+  </div>
+
+  <div data-tv="toolbar"></div>
+  <div data-tv="scan"></div>
+  <div data-tv="list"></div>
+
+  <details class="card tv-help" open>
+    <summary><span class="card-title">How to set the Pre-Shared Key on the TV</span></summary>
+    <p>The key is set on the TV, not handed out by it. Menu names vary a little between years; on Google TV models these are
+      under Settings → Network &amp; Internet (or Home → Settings → Network).</p>
+    <ol>
+      <li><strong>Remote Start</strong> → On (Network → Remote Start). This lets the TV be switched on over the network.</li>
+      <li>Home network setup → IP Control → <strong>Authentication</strong> → <strong>Normal and Pre-Shared Key</strong>.</li>
+      <li>Home network setup → IP Control → <strong>Pre-Shared Key</strong> → <strong>1234</strong>.</li>
+      <li>Remote device settings → <strong>Control Remotely</strong> → On.</li>
+    </ol>
+    <p>If IP control stopped working after a firmware update (the TV answers 403), the update may have broken the key: clear
+      the Pre-Shared Key field completely, including a hidden space before 1234, save, then enter 1234 again.</p>
+    <p>For the antenna input to be selectable over IP: Home → Settings → External Inputs → Customize TV key → Channels.</p>
+    <h3>Then</h3>
+    <ol>
+      <li>Enter the same key here and pick <strong>Save &amp; test</strong>. SplycedBoard reads the TV's model and MAC address
+        with it, which only works with the right key.</li>
+      <li>Blueprint needs nothing more: the key is written into Savant's Sony profiles.</li>
+    </ol>
+  </details>
+</div>

@@ -80,18 +80,24 @@ const SB = (() => {
 
   // ── Integrations: nav, overview cards, panel state ───────────────────────
 
+  const isTool = (i) => i.category === 'tool';
+
   function renderNav() {
-    $('navIntegrations').innerHTML = integrations.map((i) => `
+    const item = (i) => `
       <a class="nav-item${i.enabled ? '' : ' is-off'}" href="#/${esc(i.id)}" data-route="${esc(i.id)}">
         <span class="nav-icon">${esc(i.icon || '◆')}</span>${esc(i.name)}
         <span class="status-dot ${esc(i.status.level)}" title="${esc(i.status.text)}"></span>
-      </a>`).join('');
+      </a>`;
+    $('navIntegrations').innerHTML = integrations.filter((i) => !isTool(i)).map(item).join('');
+    const tools = integrations.filter(isTool);
+    $('navTools').innerHTML = tools.map(item).join('');
+    $('navToolsLabel').hidden = !tools.length;
     const route = currentRoute();
     document.querySelectorAll('.nav-item').forEach((a) => a.classList.toggle('active', a.dataset.route === route));
   }
 
   function renderCards() {
-    $('integrationCards').innerHTML = integrations.map((i) => {
+    $('integrationCards').innerHTML = integrations.filter((i) => !isTool(i)).map((i) => {
       const endpoints = (i.endpoints || []).map((e) => `<span class="info-chip">${esc(e.protocol)} ${esc(e.port)}${e.path ? ` ${esc(e.path)}` : ''}</span>`).join('');
       const cls = !i.enabled ? ' is-off' : i.status.level === 'error' ? ' is-error' : '';
       return `
@@ -125,7 +131,7 @@ const SB = (() => {
     p.banner.hidden = !off;
     if (off) {
       if (!i.enabled) {
-        p.banner.innerHTML = `<div><strong>${esc(i.name)} is switched off.</strong> Savant can't use it until it's switched back on.</div>
+        p.banner.innerHTML = `<div><strong>${esc(i.name)} is switched off.</strong>${isTool(i) ? '' : " Savant can't use it until it's switched back on."}</div>
           <button class="btn btn-primary btn-sm" onclick="SB.setEnabled('${esc(i.id)}', true)">Switch on</button>`;
       } else if (i.status.level === 'error') {
         p.banner.innerHTML = `<div><strong>${esc(i.name)} couldn't start.</strong> ${esc(i.status.text)}</div>

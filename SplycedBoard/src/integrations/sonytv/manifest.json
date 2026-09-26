@@ -1,0 +1,9 @@
+{
+  "id": "sonytv",
+  "name": "Sony TV",
+  "icon": "📺",
+  "category": "tool",
+  "description": "Finds Sony BRAVIA TVs on the network, checks the Pre-Shared Key set on the TV (Savant's Sony profiles send 1234), and works the TV like a remote.",
+  "defaultEnabled": true,
+  "endpoints": []
+}

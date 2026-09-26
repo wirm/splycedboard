@@ -1,0 +1,9 @@
+{
+  "id": "samsungtv",
+  "name": "Samsung TV",
+  "icon": "📺",
+  "category": "tool",
+  "description": "Finds Samsung TVs on the network, gets the AccessToken Savant's IP profiles need (someone picks Allow on the TV), and works any Samsung TV like a remote — 2020 and newer over IP Control, 2016–2019 over Smart View, older ones over the legacy remote.",
+  "defaultEnabled": true,
+  "endpoints": []
+}

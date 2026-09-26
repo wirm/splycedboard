@@ -1,0 +1,123 @@
+/* The TV tools' pages (Tools → Samsung TV, LG TV, Sony TV); js/tv-tool.js renders them. */
+
+.tv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+.tv-toolbar-chip { margin-left: auto; }
+.tv-note { margin-top: -4px; }
+.tv-muted { color: var(--faint); font-weight: 400; }
+.mono { font-family: var(--font-mono); }
+
+/* Scan results */
+.tv-scan-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tv-scan-head .card-title { margin-bottom: 0; }
+.tv-scan-status { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin: 10px 0 12px; }
+.tv-scan-status .spinner { width: 16px; height: 16px; }
+.tv-found {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.tv-found-name { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+
+/* One TV */
+.tv-card.has-warning { border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+.tv-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.tv-name { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+.tv-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.tv-facts span + span::before { content: "·"; margin-right: 12px; color: var(--faint); }
+.tv-blueprint {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+  background: var(--blue-dim);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.tv-addresses { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 14px 0 12px; font-size: 13px; color: var(--muted); }
+.tv-copy code { color: var(--text); font-size: 13px; }
+.tv-copy-btn {
+  background: none;
+  border: none;
+  color: var(--blue-text);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  vertical-align: baseline;
+}
+.tv-copy-btn:hover { color: var(--accent-text); }
+
+.tv-key { margin-bottom: 10px; }
+.tv-key label { margin-bottom: 6px; }
+.tv-key-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tv-key-row input { flex: 1 1 220px; min-width: 0; }
+.tv-key-secondary input { color: var(--muted); }
+.tv-key-ok { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--green-text); }
+.tv-key-unknown { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.tv-pairing { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--accent-text); }
+.tv-pairing .spinner { width: 16px; height: 16px; }
+.tv-warning { margin: 8px 0 0; line-height: 1.5; }
+.tv-actions { margin-top: 14px; flex-wrap: wrap; }
+
+/* How-to cards */
+.tv-help summary { cursor: pointer; list-style: none; }
+.tv-help summary::-webkit-details-marker { display: none; }
+.tv-help summary .card-title { margin-bottom: 0; display: inline-flex; }
+.tv-help[open] summary { margin-bottom: 14px; }
+.tv-help summary::after { content: "Show"; float: right; font-size: 12px; color: var(--blue-text); font-family: var(--font-display); }
+.tv-help[open] summary::after { content: "Hide"; }
+.tv-help h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin: 16px 0 8px; }
+.tv-help h3:first-of-type { margin-top: 0; }
+.tv-help ol, .tv-help ul { padding-left: 20px; font-size: 13px; line-height: 1.7; color: var(--text); }
+.tv-help p { font-size: 13px; line-height: 1.6; color: var(--muted); margin: 8px 0; }
+.tv-help code { font-size: 12px; }
+.tv-years { width: 100%; border-collapse: collapse; font-size: 13px; margin: 4px 0 8px; }
+.tv-years th, .tv-years td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--border-soft); vertical-align: top; }
+.tv-years th { font-family: var(--font-display); font-weight: 600; color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; border-top: none; }
+
+/* Remote */
+.tv-remote-modal { width: 400px; max-height: 92vh; overflow-y: auto; }
+.tv-remote { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.tv-remote-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.tv-dpad { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(3, 58px); gap: 6px; }
+.tv-key {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, transform 0.08s;
+}
+.tv-key:hover { border-color: var(--accent); }
+.tv-key:active, .tv-key.is-pressed { background: var(--accent-dim); border-color: var(--accent); transform: scale(0.96); }
+.btn.is-pressed { background: var(--accent-dim); }
+.tv-up { grid-area: 1 / 2; }
+.tv-left { grid-area: 2 / 1; }
+.tv-ok { grid-area: 2 / 2; font-family: var(--font-display); font-size: 14px; font-weight: 700; border-radius: 50%; }
+.tv-right { grid-area: 2 / 3; }
+.tv-down { grid-area: 3 / 2; }
+.tv-remote-rockers { gap: 28px; }
+.tv-rocker { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.tv-volume { display: flex; align-items: center; gap: 10px; font-size: 12px; margin: 0; width: 100%; max-width: 300px; }
+.tv-volume input { flex: 1; accent-color: var(--accent); }
+.tv-numbers { width: 100%; max-width: 240px; }
+.tv-numbers summary { cursor: pointer; text-align: center; font-family: var(--font-display); font-size: 12px; color: var(--blue-text); }
+.tv-numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.tv-num { height: 40px; font-size: 15px; }
+.tv-color { width: 44px; height: 22px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; }
+.tv-color-red { background: #c0392b; }
+.tv-color-green { background: #3f8a4f; }
+.tv-color-yellow { background: #d9a520; }
+.tv-color-blue { background: #2f6fb0; }
+.tv-color.is-pressed { transform: scale(0.94); }
+.tv-keyboard-hint { font-size: 11px; color: var(--faint); text-align: center; line-height: 1.5; margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .tv-toolbar-chip { margin-left: 0; width: 100%; }
+  .tv-dpad { grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); }
+}

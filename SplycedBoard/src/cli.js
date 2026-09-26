@@ -6,6 +6,9 @@
  *   cli.js choices                `id <tab> enabled(1|0) <tab> name` per integration
  *   cli.js set-enabled a,b        switch on exactly these integrations, the rest off
  *   cli.js profiles a,b           absolute paths of their Savant profiles, one per line
+ *
+ * Tools (manifest "category": "tool", like the TV tools) aren't integrations to choose: they
+ * stay out of these lists and keep their own on/off setting.
  */
 const fs = require('fs');
 const path = require('path');
@@ -15,6 +18,9 @@ const { JsonStore } = require('./core/store');
 const registry = require('./integrations');
 
 const hubSettings = new JsonStore(path.join(paths.DATA_DIR, 'hub.json'), { integrations: {} });
+
+/** The integrations the installer offers: everything but the tools. */
+const integrations = () => registry.manifests().filter((m) => m.category !== 'tool');
 
 function isEnabled(manifest, saved) {
   const flag = saved.integrations?.[manifest.id]?.enabled;
@@ -33,7 +39,7 @@ function parseIds(arg) {
 const commands = {
   list() {
     const saved = hubSettings.load();
-    const list = registry.manifests().map((m) => ({
+    const list = integrations().map((m) => ({
       id: m.id,
       name: m.name,
       description: m.description,
@@ -46,7 +52,7 @@ const commands = {
   /** Tab-separated `id  enabled(1|0)  name` lines, easy to read from bash. */
   choices() {
     const saved = hubSettings.load();
-    for (const m of registry.manifests()) {
+    for (const m of integrations()) {
       process.stdout.write(`${m.id}\t${isEnabled(m, saved) ? 1 : 0}\t${m.name}\n`);
     }
   },
@@ -55,7 +61,7 @@ const commands = {
     const on = new Set(parseIds(arg));
     hubSettings.update((s) => {
       s.integrations = s.integrations || {};
-      for (const m of registry.manifests()) {
+      for (const m of integrations()) {
         s.integrations[m.id] = { ...s.integrations[m.id], enabled: on.has(m.id) };
       }
     });

@@ -46,6 +46,9 @@ Then add the id to `INTEGRATIONS` in `src/integrations/index.js`.
 - `id` must match the folder name. It becomes the API prefix (`/api/mydevice`), the settings
   folder (`data/mydevice/`), the log tag (`[mydevice]`) and the dashboard route (`#/mydevice`).
 - `defaultEnabled` decides whether a fresh install switches it on.
+- `"category": "tool"` makes it a tool rather than an integration: the dashboard lists it under
+  Tools, leaves it off the Overview, and the installer doesn't offer it. A tool has no Savant
+  profile; the TV tools (`samsungtv`, `lgtv`, `sonytv`) are `core/tv/tool.js` with a driver each.
 - `endpoints` is shown on the Overview card, for the installer's reference.
 
 ## 3. index.js — the contract

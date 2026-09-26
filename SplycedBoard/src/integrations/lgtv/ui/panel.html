@@ -1,0 +1,58 @@
+<div class="page-body tv-tool">
+  <div class="page-head stars">
+    <h1>LG TV</h1>
+    <p>Find LG TVs on the network, check the keycode from each TV's IP Control Setup screen, and work the TV like a remote.
+      The keycode is what Blueprint's LG profiles call the AccessToken. TVs in the Blueprint configuration this host runs
+      are listed with the keycode Blueprint has for them.</p>
+  </div>
+
+  <div data-tv="toolbar"></div>
+  <div data-tv="scan"></div>
+  <div data-tv="list"></div>
+
+  <details class="card tv-help" open>
+    <summary><span class="card-title">How to get the keycode</span></summary>
+    <p>LG TVs don't hand the key over the network: you turn on Network IP Control in a hidden menu on the TV, and it shows
+      the keycode. IP control needs the TV on Ethernet (not Wi-Fi). 2018 and newer TVs need the keycode; 2016–2017 ones
+      work without it.</p>
+
+    <h3>2021 and newer (webOS 6+: QNED, NANO, UP, UQ, OLED B1/C1 and later)</h3>
+    <ol>
+      <li>Press the Settings button (cog) on the remote.</li>
+      <li>Go down to <strong>All Settings</strong> and select it.</li>
+      <li>Go down to <strong>General</strong> and select it.</li>
+      <li>Go down until the cursor is on <strong>Network</strong>, but don't select it.</li>
+      <li>Press <strong>7 3 7 7 7</strong> on the remote. The IP Control Setup menu opens.</li>
+      <li>Set <strong>Network IP Control</strong> to On.</li>
+      <li>Select <strong>Generate Keycode</strong> and write the keycode down exactly (it's case sensitive).</li>
+      <li>Back in IP Control Setup, turn on <strong>Wake On LAN</strong>, so the TV can be switched on over the network.</li>
+    </ol>
+
+    <h3>2018 – 2020 (OLED B8/C8 through CX, SK, SM, UM, NANO 2020)</h3>
+    <ol>
+      <li>Press and hold the Settings button on the remote for at least 5 seconds; the settings menu opens.</li>
+      <li>Go down until the cursor is on the network item (sometimes called <strong>Connection</strong>), but don't press Enter.</li>
+      <li>Press <strong>7 3 7 7 7</strong>. The IP Control Setup menu opens. (If 73777 doesn't work, try <strong>8 2 8 8 8</strong>.)</li>
+      <li>Set <strong>Network IP Control</strong> to On.</li>
+      <li>Select <strong>Generate Keycode</strong> and write the keycode down exactly (it's case sensitive).</li>
+      <li>Turn on the discovery function, and Wake On LAN where the menu has it.</li>
+    </ol>
+
+    <h3>2016 – 2017 (UH, UJ, OLED B6/B7/C7…)</h3>
+    <ol>
+      <li>On the Live TV screen, press and hold the Settings button for at least 5 seconds.</li>
+      <li>When the channel banner appears at the top, enter <strong>8 2 8</strong> and press OK (some sets want <strong>8 2 8 8 8</strong>).</li>
+      <li>In IP Control Setup, set <strong>Network IP Control</strong> to On, and pick Yes when it asks to reboot.</li>
+      <li>No keycode: leave the Keycode field here empty. Some sets also need General → Mobile TV On → <strong>Turn On Via Wi-Fi</strong>
+        (even on Ethernet) to switch on over the network.</li>
+    </ol>
+
+    <h3>Then</h3>
+    <ol>
+      <li>Type the keycode into the TV's Keycode field here and pick <strong>Save &amp; test</strong>: SplycedBoard asks the TV
+        for its MAC address with it, which only works with the right keycode.</li>
+      <li>In Blueprint, inspect the LG TV, choose <strong>State Variables</strong> in the Show menu, and set
+        <code>AccessToken</code> to the keycode. Upload the configuration.</li>
+    </ol>
+  </details>
+</div>

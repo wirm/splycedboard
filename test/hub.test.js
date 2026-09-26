@@ -29,13 +29,16 @@ test('every integration has a valid manifest, implementation and Savant profile'
 
 test('installer CLI lists integrations and saves the chosen set', () => {
   const lines = cli('choices').trim().split('\n').map((l) => l.split('\t'));
-  assert.deepEqual(lines.map(([id]) => id), registry.manifests().map((m) => m.id));
+  // Tools aren't offered: they aren't integrations to choose
+  assert.deepEqual(lines.map(([id]) => id), registry.manifests().filter((m) => m.category !== 'tool').map((m) => m.id));
+  assert.deepEqual(lines.map(([id]) => id), ['lutron', 'appletv', 'scli']);
 
   cli('set-enabled', 'scli');
   const saved = h.readJson(path.join(h.DATA_DIR, 'hub.json'));
   assert.equal(saved.integrations.lutron.enabled, false);
   assert.equal(saved.integrations.scli.enabled, true);
   assert.deepEqual(JSON.parse(cli('list')).map((i) => [i.id, i.enabled]), [['lutron', false], ['appletv', false], ['scli', true]]);
+  assert.equal(saved.integrations.samsungtv, undefined, 'tools keep their own setting');
 
   assert.match(cli('profiles', 'lutron,scli'), /\/lutron_leap bridge\.xml\n.*\/ip_requests\.xml\n$/);
   assert.throws(() => cli('set-enabled', 'nope'), /Unknown integration/);

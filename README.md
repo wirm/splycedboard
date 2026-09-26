@@ -8,7 +8,7 @@ it. Everything else in this repository is for developing it and never goes on a 
 | Path | What | On a host? |
 |---|---|---|
 | [`SplycedBoard/`](SplycedBoard/) | Installer, service, dashboard, Savant profiles, setup guides | **Yes — this whole folder** |
-| [`test/`](test/) | Automated tests and mock Lutron / Apple TV devices | No |
+| [`test/`](test/) | Automated tests and mock Lutron / Apple TV / Samsung / LG / Sony devices | No |
 | [`tools/`](tools/) | Builds the release download and test-installs it | No |
 | [`.github/workflows/release.yml`](.github/workflows/release.yml) | Publishes a release when a version tag is pushed | No |
 | [`docs/ADDING-AN-INTEGRATION.md`](docs/ADDING-AN-INTEGRATION.md) | How to add an integration | No |
@@ -62,7 +62,7 @@ throwaway folder.
 ```bash
 npm install          # SplycedBoard's dependencies + test tools (an npm workspace, so they
                      # land in ./node_modules and SplycedBoard/ stays clean)
-npm test             # end-to-end tests against mock Lutron and Apple TV devices
+npm test             # end-to-end tests against mock Lutron, Apple TV and TV devices
 ```
 
 To try changes on a real Pro Host, copy the folder over and re-run `./install` (it updates in

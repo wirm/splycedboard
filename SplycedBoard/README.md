@@ -10,6 +10,17 @@ switched on or off from a web dashboard without restarting anything.
 | **Apple TV** | IP control of any number of Apple TVs (Companion protocol, PIN pairing, no HomeKit) | `profiles/apple_apple tv (splycedboard).xml` | [docs/appletv.md](docs/appletv.md) |
 | **SCLI Bridge** | Lets other devices read/write Savant state and send service requests via `sclibridge` | `profiles/ip_requests.xml` | [docs/scli.md](docs/scli.md) |
 
+And **tools** for commissioning, on the dashboard under Tools:
+
+| Tool | What it does | Docs |
+|---|---|---|
+| **Samsung TV** | Finds Samsung TVs, gets the AccessToken Savant needs (Allow on the TV), and works any Samsung TV like a remote, 2010 models to today's | [docs/tv-tools.md](docs/tv-tools.md) |
+| **LG TV** | Finds LG TVs, shows how to get the IP control keycode and checks it, and works the TV like a remote | [docs/tv-tools.md](docs/tv-tools.md#lg-tv) |
+| **Sony TV** | Finds BRAVIA TVs, checks the Pre-Shared Key (Savant's profiles send 1234), and works the TV like a remote | [docs/tv-tools.md](docs/tv-tools.md#sony-tv) |
+
+The tools list the TVs in the Blueprint configuration the host runs, with the key Blueprint has
+for each, and warn when one is missing.
+
 This folder is everything a Pro Host needs, and one Terminal command downloads and installs it;
 see [Install](#install).
 
@@ -119,7 +130,7 @@ profiles that need updating in Blueprint too (see
 ```
 Open Dashboard.webloc   double-click to open the dashboard
 profiles/               Savant component profiles, one per integration
-docs/                   setup guides: Lutron, Apple TV, SCLI Bridge
+docs/                   setup guides: Lutron, Apple TV, SCLI Bridge, the TV tools
 scripts/                start · stop · restart · status · logs · dev · uninstall
 data/                   settings, Lutron certificates, Apple TV pairings (back this up)
 logs/                   splycedboard.log (rotates at 5 MB, keeps 3), update.log (the last update)
@@ -140,6 +151,9 @@ install, src/, public/  the app itself
   thermostats, keypads and scenes. Apple TV has pairing, a card per Apple TV, and a remote with an app
   launcher.
   The SCLI Bridge has status and a command runner.
+- **Tools**: Samsung TV, LG TV and Sony TV. Scan for TVs, get or check each one's key for
+  Blueprint, see the TVs in the running configuration (with a warning when a key is missing), and
+  work any of them like a remote, from the keyboard too.
 - **Logs**: live log view, filterable by integration, level and text, with a download
   button.
 - **Settings**: service info, restart, updates, verbose logging, folders, and all Savant
@@ -207,7 +221,9 @@ service first, because both need the same ports.
 | 12001 | SCLI Bridge | Savant host's persistent connection (IP Requests profile) |
 
 Outgoing: Lutron processors on 8081 (LEAP) and 8083 (pairing); Apple TVs on 49153
-(Companion) and 5353/UDP (discovery).
+(Companion) and 5353/UDP (discovery). The TV tools reach TVs on their own ports (Samsung 1516,
+8001/8002, 55000; LG 9761; Sony 80), SSDP 1900/UDP and Wake-on-LAN; see
+[docs/tv-tools.md](docs/tv-tools.md#ports).
 
 The dashboard and ports have no authentication, so anything on the LAN can reach them. That
 includes switching integrations off, and starting an update, though only ever to the latest
@@ -223,5 +239,6 @@ official release. Keep the Pro Host on a trusted network.
 | Settings | `…/SplycedBoard/data/hub.json`, `…/data/<integration>/settings.json` |
 | Lutron certificates | `…/SplycedBoard/data/lutron/certs/` |
 | Apple TV pairings | `…/SplycedBoard/data/appletv/settings.json` |
+| TV tools' TVs and keys | `…/SplycedBoard/data/samsungtv/`, `lgtv/`, `sonytv/` `settings.json` |
 | Logs | `…/SplycedBoard/logs/splycedboard.log` (+ `launchd.log` for crash output, `update.log` for the last update) |
 | launchd agent | `~/Library/LaunchAgents/com.splycedboard.hub.plist` |

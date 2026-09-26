@@ -1,0 +1,63 @@
+<div class="page-body tv-tool">
+  <div class="page-head stars">
+    <h1>Samsung TV</h1>
+    <p>Find Samsung TVs on the network, get the AccessToken Savant's IP profiles need, and work any Samsung TV like a
+      remote. TVs in the Blueprint configuration this host runs are listed with the token Blueprint has for them.</p>
+  </div>
+
+  <div data-tv="toolbar"></div>
+  <div data-tv="scan"></div>
+  <div data-tv="list"></div>
+
+  <details class="card tv-help">
+    <summary><span class="card-title">How Samsung TVs connect, by year</span></summary>
+    <table class="tv-years">
+      <tr><th>Years</th><th>Models</th><th>SplycedBoard</th><th>Savant</th></tr>
+      <tr>
+        <td>2020 and newer</td>
+        <td>T, A, B, C, D, F: Q60T, QN90A, QN85B, S95C, Q7DA, The Frame LS03T…</td>
+        <td>IP Control, port 1516. <strong>Request token</strong>, then pick Allow on the TV within 30 seconds.</td>
+        <td>IP, with the AccessToken in Blueprint</td>
+      </tr>
+      <tr>
+        <td>2016 – 2019</td>
+        <td>K, M, N, R: KS8000, MU8000, Q7FN, NU8000, Q60R, The Frame LS03N…</td>
+        <td>Smart View, ports 8001/8002. <strong>Request token</strong> pairs SplycedBoard's remote (Allow on the TV).</td>
+        <td>IR or RS-232: no AccessToken</td>
+      </tr>
+      <tr>
+        <td>2014 – 2015</td>
+        <td>H, J: H6400, JU7100…</td>
+        <td>The legacy remote (port 55000) on the models that have it. J models with PIN pairing can't be controlled over the network here.</td>
+        <td>IR or RS-232</td>
+      </tr>
+      <tr>
+        <td>2010 – 2013</td>
+        <td>C, D, E, F: C8000, D7000, ES8000, F6300…</td>
+        <td>The legacy remote, port 55000. <strong>Request token</strong>, then Allow on the TV.</td>
+        <td>IR or RS-232</td>
+      </tr>
+    </table>
+
+    <h3>Before requesting the AccessToken (2020 and newer)</h3>
+    <ol>
+      <li>Connect the TV by Ethernet: Savant doesn't recommend Wi-Fi for IP control.</li>
+      <li>Turn on IP Remote: Home → Settings → All Settings → Connection → Network → Expert Settings → IP Remote → Enable.</li>
+      <li>Turn the TV on and have someone at it with its remote: after <strong>Request token</strong> it asks whether to allow
+        SplycedBoard. Pick Allow within 30 seconds.</li>
+    </ol>
+
+    <h3>Putting the AccessToken in Blueprint</h3>
+    <ol>
+      <li>Copy the AccessToken here.</li>
+      <li>In Blueprint, open the configuration, inspect the TV, choose <strong>State Variables</strong> in the Show menu, and
+        paste it as <code>AccessToken</code>.</li>
+      <li>Upload the configuration. SplycedBoard reads it from this host and stops warning.</li>
+    </ol>
+
+    <h3>Switching on over the network</h3>
+    <p>Samsung TVs switch on by Wake-on-LAN, which needs the TV's MAC address. A scan finds it; in Blueprint it goes in the
+      TV's network connection, under the IP address. Some models also need Power On with Mobile turned on
+      (Settings → General → Network → Expert Settings).</p>
+  </details>
+</div>

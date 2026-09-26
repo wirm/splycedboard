@@ -416,4 +416,4 @@ async function startMockPairing({ answer = 'sign' } = {}) {
   };
 }
 
-module.exports = { startMockProcessor, startMockPairing, makeClientCerts, seedDataDir };
+module.exports = { startMockProcessor, startMockPairing, makeClientCerts, seedDataDir, selfSigned };

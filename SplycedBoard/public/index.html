@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jost:wght@400;500;600;700&family=Yellowtail&display=swap">
 <link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/tv-tool.css">
 <script>
   // Settings → Theme, applied before the first paint. Default: Splyced's cream.
   try {
@@ -45,6 +46,9 @@
 
     <div class="nav-label">Integrations</div>
     <div id="navIntegrations"></div>
+
+    <div class="nav-label" id="navToolsLabel" hidden>Tools</div>
+    <div id="navTools"></div>
 
     <div class="nav-label">System</div>
     <a class="nav-item" href="#/logs" data-route="logs"><span class="nav-icon">≡</span>Logs</a>
@@ -196,5 +200,6 @@
 <div class="toast-stack" id="toasts" aria-live="polite"></div>
 
 <script src="/js/app.js"></script>
+<script src="/js/tv-tool.js"></script>
 </body>
 </html>

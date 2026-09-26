@@ -1,0 +1,9 @@
+{
+  "id": "lgtv",
+  "name": "LG TV",
+  "icon": "📺",
+  "category": "tool",
+  "description": "Finds LG TVs on the network, checks the keycode from the TV's IP Control Setup screen (the AccessToken Savant's LG profiles use), and works the TV like a remote.",
+  "defaultEnabled": true,
+  "endpoints": []
+}

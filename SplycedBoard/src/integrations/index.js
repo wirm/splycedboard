@@ -18,6 +18,10 @@ const INTEGRATIONS = [
   'lutron',
   'appletv',
   'scli',
+  // Tools (manifest "category": "tool"): the dashboard lists them under Tools
+  'samsungtv',
+  'lgtv',
+  'sonytv',
 ];
 
 function manifests() {

@@ -11,11 +11,13 @@ camera.
 
 ## Setup
 
-1. **Protect:** open the camera → Settings → Advanced, and turn on RTSP for the quality you
+1. **Protect, Recording Manager:** set the camera's stream to **Standard**. Savant plays H.264;
+   **Enhanced** streams H.265, and the camera stays black in the Savant app.
+2. **Protect:** open the camera → Settings → Advanced, and turn on RTSP for the quality you
    want (High is usual). Protect shows something like
    `rtsps://192.168.5.1:7441/Esg1HhMEGKeVBUnU?enableSrtp`. The part between the last `/` and
    the `?` (`Esg1HhMEGKeVBUnU`) is that camera's stream token.
-2. **Blueprint:** add the profile to your library (Preferences), then one **UniFi Protect Camera
+3. **Blueprint:** add the profile to your library (Preferences), then one **UniFi Protect Camera
    (Splyced)** component per camera. In the Security Camera data table, set each camera's
    **IP Address** to the console's address, port **7447**, and its token:
 
@@ -24,7 +26,7 @@ camera.
    ```
 
    Leave the user name and password empty.
-3. Upload the configuration.
+4. Upload the configuration.
 
 ## Why it's built like this
 
@@ -41,9 +43,9 @@ camera.
 - **The path is `?`.** Blueprint puts the profile's path right after the IP Address field. Protect
   refuses `…/token/` (a trailing slash) but ignores an empty query, so `?` keeps the path
   from being empty without changing the address.
-- **H.264.** Savant's camera profiles play H.264. A camera with Protect's Enhanced Encoding on
-  streams H.265: if the tile stays black in the Savant app, turn Enhanced Encoding off for that
-  camera.
+- **Standard, not Enhanced.** Savant's camera profiles play H.264. Protect's Recording Manager
+  streams a camera set to Enhanced as H.265 (same token, different video), which Savant can't
+  show; Standard is H.264.
 - **One stream per camera.** The thumbnail and fullscreen views play the same stream. With many
   cameras on screen, the Medium or Low stream's token is lighter.
 
@@ -51,6 +53,6 @@ camera.
 
 Against a Protect console on the Beta Host's network (192.168.5.1): `rtsp://192.168.5.1:7447/<token>`
 and `…/<token>?` answer; `…/<token>/` doesn't; with `?enableSrtp` the stream description carries
-SRTP keys (`a=crypto`); a login in the address is ignored; with Enhanced Encoding off, a G6
-streams H.264. Still to check in Savant: that Blueprint builds `rtsp://192.168.5.1:7447/<token>?`
+SRTP keys (`a=crypto`); a login in the address is ignored; set to Standard, a G6 streams
+H.264 (Enhanced: H.265). Still to check in Savant: that Blueprint builds `rtsp://192.168.5.1:7447/<token>?`
 from the IP Address field, and the picture in the Savant app.

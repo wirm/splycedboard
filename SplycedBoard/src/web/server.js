@@ -8,6 +8,8 @@
  *   /api/<id>/...      each integration's own API — answers 503 while the integration is off
  *   /api/...           root paths for integrations with "legacyApiRoot" (the Lutron profile's)
  *   /ws                WebSocket: { source: 'hub' | <id>, type, ... }
+ *   /login, /api/auth  the dashboard password (web/access.js): with one set, requests from other
+ *                      devices need a login; requests from this Mac itself (Savant) never do
  */
 const fs = require('fs');
 const os = require('os');
@@ -21,6 +23,8 @@ const paths = require('../core/paths');
 const { listen, close } = require('../core/net');
 const { zip } = require('../core/zip');
 const { readProfile } = require('../core/profiles');
+const { AuthStore } = require('../core/auth');
+const { createAccess } = require('./access');
 
 const WEB_PORT = Number(process.env.SPLYCEDBOARD_WEB_PORT) || 47200;
 
@@ -45,12 +49,26 @@ function lanAddresses() {
  * @param hub       core/hub Hub, already load()ed
  * @param app       { name, version, runtime, managed, startedAt, restart() }
  * @param updates   core/updates Updater (optional: no update API without it)
+ * @param auth      core/auth AuthStore (default: data/auth.json)
+ * @param trustLocal  requests from this Mac need no password (tests turn it off)
  */
-async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = null }) {
+async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = null, auth = null, trustLocal = true }) {
   const log = logger.createLogger('web');
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json());
+
+  // ── The password: before anything else is served ───────────────────────────
+  const access = createAccess({
+    store: auth || new AuthStore(path.join(paths.DATA_DIR, 'auth.json')),
+    trustLocal,
+    publicDir: paths.PUBLIC_DIR,
+    log,
+  });
+  app.use(access.middleware);
+  app.get('/login', access.loginPage);
+  app.use('/api/auth', access.router);
+
   app.use(express.static(paths.PUBLIC_DIR));
 
   // ── Integration dashboard panels ───────────────────────────────────────────
@@ -78,7 +96,8 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
   // ── Hub API ────────────────────────────────────────────────────────────────
   const api = express.Router();
 
-  const snapshot = () => ({
+  const snapshot = (req) => ({
+    auth: access.describe(req),
     app: {
       name: appInfo.name,
       version: appInfo.version,
@@ -96,7 +115,7 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
     update: updates ? updates.status() : null,
   });
 
-  api.get('/', (req, res) => res.json(snapshot()));
+  api.get('/', (req, res) => res.json(snapshot(req)));
 
   // Called by the Savant profiles' ReportProfileVersion action (see core/profiles.js).
   api.get('/profile-report', (req, res) => {
@@ -231,7 +250,7 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
 
   // ── HTTP + WebSocket ───────────────────────────────────────────────────────
   const server = http.createServer(app);
-  const wss = new WebSocket.Server({ server, path: '/ws' });
+  const wss = new WebSocket.Server({ server, path: '/ws', verifyClient: ({ req }) => access.allowUpgrade(req) });
 
   const broadcast = (msg) => {
     if (!wss.clients.size) return;

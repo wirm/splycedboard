@@ -15,7 +15,6 @@ DESKTOP_LINK="${SPLYCEDBOARD_DESKTOP_LINK:-$HOME/Desktop/SplycedBoard}"
 LAUNCH_AGENTS="${SPLYCEDBOARD_LAUNCH_AGENTS:-$HOME/Library/LaunchAgents}"
 PLIST="$LAUNCH_AGENTS/$LABEL.plist"
 LEGACY_PLIST="$LAUNCH_AGENTS/$LEGACY_LABEL.plist"
-BLUEPRINT_PROFILES="$HOME/Library/Application Support/RacePointMedia/systemConfig.rpmConfig/componentProfiles"
 GUI_DOMAIN="gui/$(id -u)"
 
 # ── Terminal output ──────────────────────────────────────────────────────────
@@ -101,44 +100,50 @@ OSA
   fi
 }
 
-# choose_many PROMPT DEFAULTS ITEM... — DEFAULTS and the output are newline-separated
-choose_many() {
-  local prompt="$1" defaults="$2"; shift 2
-  if [ "${SB_ASSUME_YES:-0}" = 1 ]; then printf '%s\n' "$defaults"; return 0; fi
+# ask_secret MESSAGE SKIP_BUTTON OK_BUTTON — prints what was typed (hidden); nothing if skipped
+ask_secret() {
+  local msg="$1" skip="$2" okb="$3" out reply
   if [ "$USE_GUI" = 1 ]; then
-    osascript - "$prompt" "$defaults" "$@" 2>/dev/null <<'OSA'
+    out="$(osascript - "$msg" "$APP_NAME" "$skip" "$okb" 2>/dev/null <<'OSA'
 on run argv
-  set thePrompt to item 1 of argv
-  set AppleScript's text item delimiters to linefeed
-  set defaultNames to text items of (item 2 of argv)
-  set theItems to items 3 thru -1 of argv
-  set defaultItems to {}
-  repeat with d in defaultNames
-    if theItems contains (d as text) then set end of defaultItems to (d as text)
-  end repeat
   activate
-  set picked to choose from list theItems with title "SplycedBoard" with prompt thePrompt default items defaultItems OK button name "Continue" with multiple selections allowed and empty selection allowed
-  if picked is false then error number -128
-  return picked as text
+  set r to display dialog (item 1 of argv) with title (item 2 of argv) default answer "" with hidden answer buttons {item 3 of argv, item 4 of argv} default button 2 with icon note
+  if button returned of r is (item 3 of argv) then return ""
+  return "=" & (text returned of r)
 end run
 OSA
-    return $?
+)" || out=""
+    printf '%s' "${out#=}"
+    return 0
   fi
-  printf '\n%s\n' "$prompt" >&2
-  local i=1 item marks=() reply
-  for item in "$@"; do
-    if printf '%s\n' "$defaults" | grep -qxF "$item"; then marks+=("$i"); printf '  [x] %d) %s\n' "$i" "$item" >&2
-    else printf '  [ ] %d) %s\n' "$i" "$item" >&2; fi
-    i=$((i + 1))
+  printf '\n%s\n' "$msg" >&2
+  read -r -s -p "  Password (Enter alone: ${skip}): " reply </dev/tty || reply=""
+  printf '\n' >&2
+  printf '%s' "$reply"
+}
+
+# new_password MESSAGE [SKIP_BUTTON] — asks twice until the two match and it's long enough.
+# Prints the password, or nothing when skipped. Never put it on a command line: pipe it.
+new_password() {
+  local msg="$1" skip="${2:-Skip}" pw again
+  while :; do
+    pw="$(ask_secret "$msg
+
+At least 6 characters." "$skip" "Next")"
+    [ -z "$pw" ] && return 0
+    if [ "${#pw}" -lt 6 ]; then
+      # stderr: this function's stdout is the password
+      [ "$USE_GUI" = 1 ] && alert "That's shorter than 6 characters. Try again." || warn "That's shorter than 6 characters. Try again." >&2
+      continue
+    fi
+    again="$(ask_secret "Type the same password again." "$skip" "Set Password")"
+    [ -z "$again" ] && return 0
+    if [ "$pw" = "$again" ]; then
+      printf '%s' "$pw"
+      return 0
+    fi
+    [ "$USE_GUI" = 1 ] && alert "The two passwords weren't the same. Try again." || warn "The two passwords weren't the same. Try again." >&2
   done
-  local default_list; default_list=$(IFS=,; echo "${marks[*]:-}")
-  read -r -p "  Numbers to enable, comma-separated (Enter = ${default_list:-none}, 0 = none): " reply </dev/tty || return 1
-  [ -z "$reply" ] && reply="$default_list"
-  local n
-  for n in ${reply//,/ }; do
-    [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le $# ] && printf '%s\n' "${!n}"
-  done
-  return 0
 }
 
 notify() {

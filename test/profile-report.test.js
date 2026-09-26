@@ -112,7 +112,10 @@ test('each component counts separately, and one that goes quiet drops off', () =
 // ── Over HTTP, as Savant calls it ───────────────────────────────────────────
 
 let hub;
-before(async () => { hub = await h.startHub(); });
+before(async () => {
+  h.setEnabled({ lutron: true }); // integrations start switched off
+  hub = await h.startHub();
+});
 after(() => hub.stop());
 
 // A plain GET with only the headers given: Savant's HTTP client sends none of the ones

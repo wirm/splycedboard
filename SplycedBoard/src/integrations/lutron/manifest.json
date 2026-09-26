@@ -4,7 +4,7 @@
   "icon": "💡",
   "description": "Controls Lutron HomeWorks QSX and RadioRA 3 lighting, shades, keypads and Palladiom thermostats from Savant over the LEAP protocol.",
   "profile": "lutron_leap bridge.xml",
-  "defaultEnabled": true,
+  "defaultEnabled": false,
   "legacyApiRoot": true,
   "endpoints": [
     {

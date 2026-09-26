@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplycedBoard · Log in</title>
+<link rel="icon" href="/img/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600&family=Jost:wght@500;600&family=Yellowtail&display=swap">
+<link rel="stylesheet" href="/css/app.css">
+<script>
+  try {
+    const theme = localStorage.getItem('splycedboard.theme');
+    if (theme === 'dark' || theme === 'auto') document.documentElement.dataset.theme = theme;
+  } catch { /* storage unavailable: cream */ }
+</script>
+<style>
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  .login { width: 100%; max-width: 380px; }
+  .login .logo { justify-content: center; margin-bottom: 24px; font-size: 24px; }
+  .login .card { padding: 28px; }
+  .login h1 { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .login p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+  .login input[type=password] { width: 100%; }
+  .login .btn { width: 100%; justify-content: center; margin-top: 4px; }
+  .login .alert { margin: 12px 0 0; }
+  .login .hint { font-size: 12px; color: var(--faint); margin-top: 18px; line-height: 1.6; text-align: center; }
+  .login code { font-size: 11px; }
+</style>
+</head>
+<body>
+  <main class="login">
+    <div class="logo">
+      <img class="logo-mark" src="/img/logo.svg" alt="" width="40" height="38">
+      <span>Splyced<span class="script">Board</span></span>
+    </div>
+    <form class="card" id="loginForm">
+      <h1>Log in</h1>
+      <p>This SplycedBoard has a password. Enter it to manage the integrations on this Savant host.</p>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+      </div>
+      <button class="btn btn-primary" type="submit" id="loginBtn">Log in</button>
+      <div class="alert alert-error" id="loginError" role="alert"></div>
+    </form>
+    <div class="hint">Forgot it? On the Savant host, run <code>scripts/reset-password</code> in the
+      SplycedBoard folder on the Desktop.</div>
+  </main>
+<script>
+  const form = document.getElementById('loginForm');
+  const error = document.getElementById('loginError');
+  const button = document.getElementById('loginBtn');
+  // Back to where the login was needed, but only somewhere on this dashboard. The page's
+  // #/… part never reaches the server; the browser keeps it through the redirect, here.
+  const next = new URLSearchParams(location.search).get('next') || '/';
+  const safe = next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  const target = safe.includes('#') ? safe : safe + location.hash;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    button.disabled = true;
+    error.classList.remove('show');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-SplycedBoard-Dashboard': '1' },
+        body: JSON.stringify({ password: document.getElementById('password').value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        location.replace(target);
+        return;
+      }
+      error.textContent = data.error || `Couldn't log in (HTTP ${res.status})`;
+    } catch (err) {
+      error.textContent = `Couldn't reach SplycedBoard: ${err.message}`;
+    }
+    error.classList.add('show');
+    button.disabled = false;
+    document.getElementById('password').select();
+  });
+</script>
+</body>
+</html>

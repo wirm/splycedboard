@@ -5,7 +5,12 @@
  *   cli.js list                   integrations as JSON (manifest fields + enabled)
  *   cli.js choices                `id <tab> enabled(1|0) <tab> name` per integration
  *   cli.js set-enabled a,b        switch on exactly these integrations, the rest off
+ *   cli.js enable a,b             switch these on, leave the rest as they are
  *   cli.js profiles a,b           absolute paths of their Savant profiles, one per line
+ *   cli.js has-password           "yes" or "no": is there a dashboard password
+ *   cli.js set-password           a new dashboard password, read from stdin (never argv, where
+ *                                 other users could see it); every login ends
+ *   cli.js clear-password         no dashboard password
  *
  * Tools (manifest "category": "tool", like the TV tools) aren't integrations to choose: they
  * stay out of these lists and keep their own on/off setting.
@@ -15,9 +20,11 @@ const path = require('path');
 
 const paths = require('./core/paths');
 const { JsonStore } = require('./core/store');
+const { AuthStore } = require('./core/auth');
 const registry = require('./integrations');
 
 const hubSettings = new JsonStore(path.join(paths.DATA_DIR, 'hub.json'), { integrations: {} });
+const auth = new AuthStore(path.join(paths.DATA_DIR, 'auth.json'));
 
 /** The integrations the installer offers: everything but the tools. */
 const integrations = () => registry.manifests().filter((m) => m.category !== 'tool');
@@ -65,6 +72,28 @@ const commands = {
         s.integrations[m.id] = { ...s.integrations[m.id], enabled: on.has(m.id) };
       }
     });
+  },
+
+  enable(arg) {
+    const on = parseIds(arg);
+    hubSettings.update((s) => {
+      s.integrations = s.integrations || {};
+      for (const id of on) s.integrations[id] = { ...s.integrations[id], enabled: true };
+    });
+  },
+
+  'has-password'() {
+    process.stdout.write(auth.isSet() ? 'yes\n' : 'no\n');
+  },
+
+  'set-password'() {
+    const input = fs.readFileSync(0, 'utf8').replace(/\r?\n$/, '');
+    fs.mkdirSync(paths.DATA_DIR, { recursive: true, mode: 0o700 });
+    auth.setPassword(input);
+  },
+
+  'clear-password'() {
+    auth.clear();
   },
 
   profiles(arg) {

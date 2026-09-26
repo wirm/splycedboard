@@ -89,6 +89,7 @@ async function main() {
   check(files.size === zipFiles.size && [...files].every(([f, exec]) => zipFiles.get(f) === exec),
     'SplycedBoard.zip and SplycedBoard.tar.gz hold different files or executable bits');
   check(files.get('install'), 'install is not executable in the package');
+  check(files.get('scripts/reset-password'), 'scripts/reset-password is not executable in the package');
   ok(`${files.size} files, the same in both, executable bits included`);
 
   step('Installing (headless, into a throwaway home folder, launchd skipped)');
@@ -129,6 +130,12 @@ async function main() {
   check(hub.app.managed === true, "It didn't get SPLYCEDBOARD_MANAGED from the launchd agent");
   check(fs.realpathSync(hub.app.dirs.app) === fs.realpathSync(appDir), `It runs from ${hub.app.dirs.app}, not the installed copy`);
   ok(`v${version} on ${hub.app.runtime}, running from the installed copy`);
+
+  // The installer asks nothing with --yes: no integration is switched on, and no password set.
+  const on = hub.integrations.filter((i) => i.category !== 'tool' && i.enabled).map((i) => i.name);
+  check(!on.length, `A new install should start with every integration off, but ${on.join(', ')} ${on.length === 1 ? 'is' : 'are'} on`);
+  check(hub.auth?.passwordSet === false, 'A --yes install should leave the dashboard without a password');
+  ok('A new install has every integration off and no password');
 
   step('Switching every integration on');
   check(hub.integrations.length > 0, 'No integrations were loaded');

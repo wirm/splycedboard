@@ -60,8 +60,11 @@ async function waitFor(fn, { timeout = 5000, interval = 25, what = 'condition' }
   }
 }
 
-/** Boot a hub + web server in this process, like src/index.js does. `updates`: an Updater. */
-async function startHub({ updates = null } = {}) {
+/**
+ * Boot a hub + web server in this process, like src/index.js does. `updates`: an Updater.
+ * `trustLocal: false` treats this test's requests like another device's (password needed).
+ */
+async function startHub({ updates = null, trustLocal = true } = {}) {
   const { Hub } = require('../../SplycedBoard/src/core/hub');
   const { createWebServer } = require('../../SplycedBoard/src/web/server');
   const hub = new Hub();
@@ -70,6 +73,7 @@ async function startHub({ updates = null } = {}) {
     hub,
     port: 0,
     updates,
+    trustLocal,
     app: { name: 'SplycedBoard', version: 'test', runtime: 'test', managed: false, startedAt: new Date().toISOString() },
   });
   await hub.startEnabled();

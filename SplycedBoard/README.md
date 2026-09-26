@@ -77,8 +77,11 @@ and a space, drag `install` from the folder into the Terminal window, and press 
 The installer opens a few macOS dialogs:
 
 1. **Install / Update** confirmation
-2. **Which integrations** to switch on (changeable later on the dashboard)
-3. **Copy Savant profiles to Blueprint**, if Blueprint's profile folder is on this Mac
+2. **A dashboard password**, typed twice (only when none is set yet; **Skip** leaves the
+   dashboard open). See [Password](#password).
+
+Every integration starts switched off on a new install: switch on the ones you need on the
+dashboard. An update keeps what's on.
 
 Then it:
 
@@ -106,7 +109,8 @@ from another device).
 > gets a link to them. Open it in Finder like any folder.
 
 Options: `./install --headless` asks in the terminal instead (automatic over SSH);
-`./install --yes` takes the defaults without asking (unattended updates).
+`./install --yes` asks nothing and keeps the current settings (unattended updates; it never
+sets a password).
 
 ### Update
 
@@ -131,7 +135,7 @@ profiles that need updating in Blueprint too (see
 Open Dashboard.webloc   double-click to open the dashboard
 profiles/               Savant component profiles, one per integration
 docs/                   setup guides: Lutron, Apple TV, SCLI Bridge, the TV tools
-scripts/                start · stop · restart · status · logs · dev · uninstall
+scripts/                start · stop · restart · status · logs · dev · uninstall · reset-password
 data/                   settings, Lutron certificates, Apple TV pairings (back this up)
 logs/                   splycedboard.log (rotates at 5 MB, keeps 3), update.log (the last update)
 install, src/, public/  the app itself
@@ -156,8 +160,24 @@ install, src/, public/  the app itself
   work any of them like a remote, from the keyboard too.
 - **Logs**: live log view, filterable by integration, level and text, with a download
   button.
-- **Settings**: service info, restart, updates, verbose logging, folders, and all Savant
-  profiles, each with the version it ships and the version Savant reports running.
+- **Settings**: service info, restart, updates, the dashboard password, verbose logging,
+  folders, and all Savant profiles, each with the version it ships and the version Savant
+  reports running.
+
+### Password
+
+With a password set, other devices on the network see a login page and need the password to
+use the dashboard or its API. A login lasts 30 days in that browser. Requests from the Pro
+Host itself never need it: that's how Savant's profiles reach SplycedBoard (127.0.0.1, or
+the host's own address), and how the installer and `scripts/status` check on the service.
+
+- Set it when installing, or in **Settings → Dashboard password**, where it can also be
+  changed (that logs out every other browser) or removed.
+- Forgot it? On the Pro Host, run `~/Desktop/SplycedBoard/scripts/reset-password` (or
+  double-click it in Finder) and type a new one. It doesn't ask for the old one: whoever can
+  run it is at the Mac already. `scripts/reset-password --remove` removes it.
+- Five wrong passwords in 10 minutes lock that address out for a minute, then longer.
+- It's stored as a salted scrypt hash in `data/auth.json`.
 
 ## Connecting an integration to Savant
 
@@ -205,6 +225,7 @@ arrives. Requests from Savant that fail are logged too, verbose or not.
 ~/Desktop/SplycedBoard/scripts/stop       # until next login or scripts/start
 ~/Desktop/SplycedBoard/scripts/start
 ~/Desktop/SplycedBoard/scripts/uninstall  # asks whether to keep settings and pairing
+~/Desktop/SplycedBoard/scripts/reset-password   # a new dashboard password (--remove: none)
 ~/Desktop/SplycedBoard/scripts/dev        # run in the foreground with live output (troubleshooting)
 ```
 
@@ -225,9 +246,10 @@ Outgoing: Lutron processors on 8081 (LEAP) and 8083 (pairing); Apple TVs on 4915
 1515, 8001/8002, 55000; LG 9761; Sony 80), SSDP 1900/UDP and Wake-on-LAN; see
 [docs/tv-tools.md](docs/tv-tools.md#ports).
 
-The dashboard and ports have no authentication, so anything on the LAN can reach them. That
-includes switching integrations off, and starting an update, though only ever to the latest
-official release. Keep the Pro Host on a trusted network.
+With a [password](#password) set, port 47200 needs it from every other device. The other
+ports are for Savant and the devices that talk to it, and have no password: the SCLI Bridge's
+port 12000 in particular takes sclibridge commands from anything on the network, so switch it
+on only where it's needed, and keep the Pro Host on a trusted network.
 
 ---
 
@@ -237,6 +259,7 @@ official release. Keep the Pro Host on a trusted network.
 |---|---|
 | Code | `~/Library/Application Support/SplycedBoard` (link: `~/Desktop/SplycedBoard`) |
 | Settings | `…/SplycedBoard/data/hub.json`, `…/data/<integration>/settings.json` |
+| Dashboard password | `…/SplycedBoard/data/auth.json` (a salted scrypt hash) |
 | Lutron certificates | `…/SplycedBoard/data/lutron/certs/` |
 | Apple TV pairings | `…/SplycedBoard/data/appletv/settings.json` |
 | TV tools' TVs and keys | `…/SplycedBoard/data/samsungtv/`, `lgtv/`, `sonytv/` `settings.json` |

@@ -17,6 +17,7 @@ const SB = (() => {
   let app = null;          // /api/hub → app info
   let settings = null;     // /api/hub → hub settings
   let update = null;       // /api/hub → update status (core/updates.js)
+  let auth = null;         // /api/hub → { passwordSet, local, loggedIn } (web/access.js)
   let integrations = [];
   const panels = {};       // id → { page, root, banner, def }
   const panelDefs = {};    // filled by SB.registerPanel as panel scripts load
@@ -37,6 +38,10 @@ const SB = (() => {
     const text = await res.text();
     let data = text;
     try { data = JSON.parse(text); } catch { /* plain text */ }
+    if (res.status === 401 && data?.login) {
+      // The login ran out (or the password changed): log in, then come back here.
+      location.href = `/login?next=${encodeURIComponent(location.pathname + location.hash)}`;
+    }
     if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
     return data;
   }
@@ -264,6 +269,7 @@ const SB = (() => {
     ws.onclose = () => {
       $('wsDot').className = 'status-dot error';
       $('wsText').textContent = 'Reconnecting…';
+      api('GET', '/api/auth').catch(() => {}); // a login that ran out goes to the login page
       setTimeout(connectWs, 3000);
     };
   }
@@ -423,6 +429,92 @@ const SB = (() => {
     const warn = sources.some((s) => ['older', 'newer', 'unreported'].includes(s.state));
     return `<div class="setting-desc profile-use${warn ? ' warn' : ''}">Savant runs: `
       + sources.map((s) => `${esc(label(s))} (${esc(s.device)})`).join(' · ') + '</div>';
+  }
+
+  // ── Dashboard password ───────────────────────────────────────────────────
+
+  function renderAuth() {
+    if (!auth) return;
+    const on = auth.passwordSet;
+    $('authTitle').textContent = on ? 'On' : 'Off';
+    $('authDesc').textContent = on
+      ? 'Other devices need the password to open this dashboard or use its API. Requests from this Mac itself never do, so Savant always reaches SplycedBoard.'
+        + (auth.local ? ' You\'re on this Mac now.' : '')
+      : 'Anyone on your network can open this dashboard, switch integrations off, or start an update. Set a password to stop that.';
+    $('authChange').textContent = on ? 'Change' : 'Set a password';
+    $('authRemove').hidden = !on;
+    $('authLogout').hidden = !(on && auth.loggedIn);
+    const notice = $('passwordNotice');
+    notice.classList.toggle('show', !on);
+    notice.innerHTML = on ? '' : '<strong>No dashboard password.</strong> Anyone on your network can use this dashboard. '
+      + '<a href="#/settings">Set one in Settings</a>.';
+  }
+
+  let authMode = 'set'; // set | change | remove
+
+  function openAuthModal(mode) {
+    authMode = mode;
+    const titles = {
+      set: ['Set a password', 'Other devices will need it to open the dashboard. This Mac never does.'],
+      change: ['Change the password', 'Every other device has to log in again.'],
+      remove: ['Remove the password', 'Anyone on your network will be able to use the dashboard.'],
+    };
+    $('authModalTitle').textContent = titles[mode][0];
+    $('authModalSubtitle').textContent = titles[mode][1];
+    $('authCurrentGroup').hidden = mode === 'set';
+    $('authNewGroup').hidden = mode === 'remove';
+    $('authConfirmGroup').hidden = mode === 'remove';
+    $('authSubmit').textContent = mode === 'remove' ? 'Remove' : 'Save';
+    $('authSubmit').className = `btn ${mode === 'remove' ? 'btn-danger' : 'btn-primary'}`;
+    for (const id of ['authCurrent', 'authNew', 'authConfirm']) $(id).value = '';
+    $('authAlert').className = 'alert';
+    $('authModal').classList.add('open');
+    setTimeout(() => $(mode === 'set' ? 'authNew' : 'authCurrent').focus(), 50);
+  }
+
+  function closeAuthModal() {
+    $('authModal').classList.remove('open');
+  }
+
+  async function submitAuth(e) {
+    e.preventDefault();
+    const alert = (msg) => {
+      $('authAlert').className = 'alert alert-error show';
+      $('authAlert').textContent = msg;
+    };
+    const current = $('authCurrent').value;
+    const password = $('authNew').value;
+    if (authMode !== 'remove') {
+      if (password.length < 6) return alert('The password needs at least 6 characters.');
+      if (password !== $('authConfirm').value) return alert('The two new passwords aren\'t the same.');
+    }
+    $('authSubmit').disabled = true;
+    try {
+      auth = authMode === 'remove'
+        ? await api('DELETE', '/api/auth/password', { current })
+        : await api('PUT', '/api/auth/password', { current: authMode === 'change' ? current : undefined, password });
+      closeAuthModal();
+      renderAuth();
+      toast({ set: 'Password set', change: 'Password changed', remove: 'Password removed' }[authMode]);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      $('authSubmit').disabled = false;
+    }
+  }
+
+  function initAuth() {
+    $('authChange').addEventListener('click', () => openAuthModal(auth?.passwordSet ? 'change' : 'set'));
+    $('authRemove').addEventListener('click', () => openAuthModal('remove'));
+    $('authLogout').addEventListener('click', async () => {
+      try { await api('POST', '/api/auth/logout'); } catch { /* going anyway */ }
+      location.href = '/login';
+    });
+    $('authForm').addEventListener('submit', submitAuth);
+    $('authCancel').addEventListener('click', closeAuthModal);
+    $('authModalClose').addEventListener('click', closeAuthModal);
+    $('authModal').addEventListener('click', (e) => { if (e.target === $('authModal')) closeAuthModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAuthModal(); });
   }
 
   // ── Updates ──────────────────────────────────────────────────────────────
@@ -585,6 +677,8 @@ const SB = (() => {
     app = snapshot.app;
     settings = snapshot.settings;
     update = snapshot.update;
+    auth = snapshot.auth || null;
+    renderAuth();
     renderSettings();
     renderUpdate();
     $('updateCheckBtn').closest('.card').hidden = !update;
@@ -596,6 +690,7 @@ const SB = (() => {
     initLogs();
     initSettings();
     initUpdates();
+    initAuth();
 
     let snapshot;
     for (;;) {

@@ -4,7 +4,7 @@
   "icon": "🔌",
   "description": "Lets other devices read and write Savant state and send service requests through sclibridge (readstate, writestate, servicerequest…) on the Pro Host.",
   "profile": "ip_requests.xml",
-  "defaultEnabled": true,
+  "defaultEnabled": false,
   "endpoints": [
     {
       "port": 12000,

@@ -67,6 +67,8 @@ async function main() {
   web = await createWebServer({
     hub,
     updates,
+    // Testing only: SPLYCEDBOARD_TRUST_LOCAL=0 asks this Mac for the password too.
+    trustLocal: process.env.SPLYCEDBOARD_TRUST_LOCAL !== '0',
     app: {
       name: paths.APP_NAME,
       version: pkg.version,

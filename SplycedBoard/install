@@ -4,7 +4,7 @@
 #
 #   ./install              guided install/update with macOS dialogs
 #   ./install --headless   same questions in the terminal (automatic over SSH)
-#   ./install --yes        no questions: keep current choices (unattended update)
+#   ./install --yes        no questions: keep current settings (unattended update)
 #
 # Installs to ~/Library/Application Support/SplycedBoard, links it to
 # ~/Desktop/SplycedBoard, and runs it as a launchd agent that starts at login and
@@ -94,11 +94,11 @@ else
   VERB="Install" DONE_WORD="installed"
   WELCOME="Install SplycedBoard v$NEW_VERSION?
 
-SplycedBoard runs your Savant integrations — Lutron LEAP, the SCLI bridge and more — as a background service on this Mac.
+SplycedBoard runs your Savant integrations — Lutron LEAP, Apple TV, the SCLI bridge and more — as a background service on this Mac.
 
 • Files go in ~/Desktop/SplycedBoard
 • It starts at login and restarts itself if it stops
-• Manage it at http://localhost:$WEB_PORT"
+• Every integration starts switched off: turn on the ones you need at http://localhost:$WEB_PORT"
 fi
 if [ -f "$LEGACY_PLIST" ]; then
   WELCOME="$WELCOME
@@ -122,37 +122,25 @@ Download and install it now from bun.sh?" "Install Bun" || die "SplycedBoard can
   ok "Installed $RUNTIME"
 fi
 
-# ── 3. Which integrations ────────────────────────────────────────────────────
+# ── 3. Dashboard password ────────────────────────────────────────────────────
+# Integrations aren't chosen here: a new install has them all switched off (their manifests'
+# default), and an update keeps what the dashboard has.
 
-step "Choosing integrations"
-IDS=() NAMES=() DEFAULTS=""
-while IFS=$'\t' read -r id enabled name; do
-  IDS+=("$id"); NAMES+=("$name")
-  [ "$enabled" = 1 ] && DEFAULTS="$DEFAULTS$name"$'\n'
-done < <(SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$SRC_DIR/src/cli.js" choices)
-[ "${#IDS[@]}" -gt 0 ] || die "Couldn't read the list of integrations from $SRC_DIR/src."
+step "Dashboard password"
+PASSWORD=""
+if [ "$(SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$SRC_DIR/src/cli.js" has-password)" = yes ]; then
+  ok "Already set (change it in the dashboard's Settings, or with scripts/reset-password)"
+elif [ "${SB_ASSUME_YES:-0}" = 1 ]; then
+  warn "None set: anyone on the network can use the dashboard. Set one in Settings, or with scripts/reset-password."
+else
+  PASSWORD="$(new_password "Set a password for the SplycedBoard dashboard?
 
-PICKED="$(choose_many "Which integrations should run on this Mac?
-
-⌘-click to pick more than one. You can change this any time on the dashboard." "$DEFAULTS" "${NAMES[@]}")" \
-  || { echo "Cancelled."; exit 0; }
-
-ENABLED_IDS=""
-for i in "${!NAMES[@]}"; do
-  if printf '%s\n' "$PICKED" | grep -qxF "${NAMES[$i]}"; then
-    ENABLED_IDS="${ENABLED_IDS:+$ENABLED_IDS,}${IDS[$i]}"
-    ok "${NAMES[$i]}"
+Other devices on the network will need it to open the dashboard. This Mac itself never does, so Savant keeps working.")"
+  if [ -n "$PASSWORD" ]; then
+    ok "Password chosen"
   else
-    printf '  %s-  %s (off)%s\n' "$DIM" "${NAMES[$i]}" "$RESET"
+    warn "Skipped: anyone on the network can use the dashboard. Set one later in Settings, or with scripts/reset-password."
   fi
-done
-
-COPY_PROFILES=0
-if [ -d "$BLUEPRINT_PROFILES" ] && [ -n "$ENABLED_IDS" ] && [ "${SB_ASSUME_YES:-0}" != 1 ]; then
-  ask_yes "Savant Blueprint's profile folder is on this Mac.
-
-Copy the Savant profiles for the chosen integrations into it, so Blueprint can add them? (Restart Blueprint afterwards.)" "Copy Profiles" \
-    && COPY_PROFILES=1 || true
 fi
 
 # ── 4. Files (the current service keeps running) ─────────────────────────────
@@ -198,8 +186,18 @@ fi
 # ── 6. Settings and launchd agent definition ─────────────────────────────────
 
 step "Saving settings"
-SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" set-enabled "$ENABLED_IDS"
-ok "Integrations on: ${ENABLED_IDS:-none}"
+if [ -n "$PASSWORD" ]; then
+  # On stdin, never the command line, where other users of this Mac could see it.
+  printf '%s' "$PASSWORD" | SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" set-password
+  PASSWORD=""
+  ok "Dashboard password set"
+fi
+if [ -f "$LEGACY_PLIST" ]; then
+  # It replaces the standalone Lutron bridge, which Savant is using: keep Lutron running.
+  SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" enable lutron
+  ok "Lutron LEAP on, in place of the old Savant Lutron Bridge"
+fi
+if [ -z "$OLD_VERSION" ]; then ok "Integrations start switched off: turn on the ones you need on the dashboard"; fi
 
 mkdir -p "$LAUNCH_AGENTS"
 # Keep launchd's own log (crash output only) from growing without bound.
@@ -297,7 +295,7 @@ else
   fi
 fi
 
-# ── 8. Desktop link, dashboard shortcut, Blueprint profiles ──────────────────
+# ── 8. Desktop link, dashboard shortcut ──────────────────────────────────────
 
 step "Finishing up"
 cat > "$INSTALL_DIR/Open Dashboard.webloc" <<WEBLOC_EOF
@@ -340,13 +338,6 @@ else
   desktop_link_failed
 fi
 
-if [ "$COPY_PROFILES" = 1 ]; then
-  while IFS= read -r profile; do
-    cp "$profile" "$BLUEPRINT_PROFILES/"
-    ok "Blueprint profile: $(basename "$profile")"
-  done < <(SPLYCEDBOARD_HOME="$INSTALL_DIR" "$RUNTIME" "$INSTALL_DIR/src/cli.js" profiles "$ENABLED_IDS")
-fi
-
 # ── Done ─────────────────────────────────────────────────────────────────────
 
 URL="http://$(lan_ip):$WEB_PORT"
@@ -362,7 +353,7 @@ if [ "${SB_ASSUME_YES:-0}" != 1 ]; then
 Dashboard: $URL
 Files: ~/Desktop/SplycedBoard
 
-Next: add the Savant profile for each integration in Blueprint (the dashboard shows how)." "Done" "Show Files" "Open Dashboard")" || true
+Next: on the dashboard, switch on the integrations you need and add their Savant profiles in Blueprint (the dashboard shows how)." "Done" "Show Files" "Open Dashboard")" || true
   case "$CHOICE" in
     "Open Dashboard") open "http://localhost:$WEB_PORT/" || true ;;
     "Show Files") open "$INSTALL_DIR" || true ;;

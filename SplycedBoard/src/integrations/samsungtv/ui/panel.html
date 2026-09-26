@@ -21,9 +21,10 @@
       </tr>
       <tr>
         <td>2016 – 2019</td>
-        <td>K, M, N, R: KS8000, MU8000, Q7FN, NU8000, Q60R, The Frame LS03N…</td>
-        <td>Smart View, ports 8001/8002. <strong>Request token</strong> pairs SplycedBoard's remote (Allow on the TV).</td>
-        <td>IR or RS-232: no AccessToken</td>
+        <td>M, N, R and some K: MU8000, NU8000, RU8000, Q7F–Q9F, Q60R–Q90R, KS7000, The Frame LS003/LS03N/LS03R…</td>
+        <td>IP Control, port 1515, on the models with IP Remote: <strong>Request token</strong>, then Allow on the TV.
+          Without it, <strong>Pair remote</strong> pairs SplycedBoard's own remote over Smart View (ports 8001/8002).</td>
+        <td>IP, with the AccessToken in Blueprint, on the models with IP Remote; IR or RS-232 otherwise</td>
       </tr>
       <tr>
         <td>2014 – 2015</td>
@@ -39,10 +40,12 @@
       </tr>
     </table>
 
-    <h3>Before requesting the AccessToken (2020 and newer)</h3>
+    <h3>Before requesting the AccessToken</h3>
     <ol>
       <li>Connect the TV by Ethernet: Savant doesn't recommend Wi-Fi for IP control.</li>
-      <li>Turn on IP Remote: Home → Settings → All Settings → Connection → Network → Expert Settings → IP Remote → Enable.</li>
+      <li>Turn on IP Remote. 2020 and newer: Home → Settings → All Settings → Connection → Network → Expert Settings →
+        IP Remote → Enable. 2016–2019: Home → Settings → General → Network → Expert Settings → IP Remote → Enable.
+        Then pick <strong>Check</strong> on the TV's card, so SplycedBoard sees it.</li>
       <li>Turn the TV on and have someone at it with its remote: after <strong>Request token</strong> it asks whether to allow
         SplycedBoard. Pick Allow within 30 seconds.</li>
     </ol>

@@ -23,25 +23,29 @@ generation each TV is from its model code and number, and uses what that TV has:
 | Years | Models | SplycedBoard | Savant |
 |---|---|---|---|
 | 2020 and newer | T, A, B, C, D, F: Q60T, QN90A, S95C, The Frame LS03T… | IP Control (port 1516) | IP, with the **AccessToken** in Blueprint |
-| 2016–2019 | K, M, N, R: KS8000, MU8000, Q7FN, NU8000, Q60R, The Frame LS03N… | Smart View (ports 8001/8002) | IR or RS-232: no AccessToken |
+| 2016–2019 | M, N, R and some K: MU8000, NU8000, RU8000, Q7F–Q9F, Q60R–Q90R, KS7000, The Frame LS003/LS03N/LS03R… | IP Control (port 1515) on the models with IP Remote; Smart View (ports 8001/8002) otherwise | IP, with the **AccessToken** in Blueprint, on the models with IP Remote; IR or RS-232 otherwise |
 | 2014–2015 | H, J | the legacy remote (port 55000) where the TV has it; J models with PIN pairing aren't supported | IR or RS-232 |
 | 2010–2013 | C, D, E, F | the legacy remote (port 55000) | IR or RS-232 |
 
-**Getting the AccessToken (2020 and newer).** Savant's own way to get it goes through System
+**Getting the AccessToken.** Savant's own way to get it goes through System
 Monitor's UPnP Discovery, or a CreateToken service request, which often fails. Here:
 
-1. Connect the TV by Ethernet and turn on **IP Remote**: Home → Settings → All Settings →
-   Connection → Network → Expert Settings → IP Remote → Enable.
+1. Connect the TV by Ethernet and turn on **IP Remote**. 2020 and newer: Home → Settings → All
+   Settings → Connection → Network → Expert Settings → IP Remote → Enable. 2016–2019: Home →
+   Settings → General → Network → Expert Settings → IP Remote → Enable. Then pick **Check** on
+   the TV's card.
 2. Turn the TV on, pick **Request token** on the TV's card, and pick **Allow** on the TV within
    30 seconds.
 3. Copy the token. In Blueprint, inspect the TV, choose State Variables in the Show menu, and
    paste it as `AccessToken`. Upload the configuration.
 
-When the TV is a 2020-or-newer model but IP Remote is off, the page says so. It then pairs its
-own remote over Smart View instead, so the TV can still be worked from the page.
+IP Control is the same on both ports: the same token, the same commands. Only the port and the
+menu that turns it on changed in 2020.
 
-For 2016–2019 and older TVs, the button says **Pair remote**. It pairs SplycedBoard's own remote
-(Allow on the TV once); the Smart View token is shown for reference, but Savant doesn't use it.
+When a TV has no IP Control to reach (IP Remote off, or a model without it), the button says
+**Pair remote**. It pairs SplycedBoard's own remote over Smart View (Allow on the TV once); that
+token is shown for reference, but Savant doesn't use it. A 2020-or-newer TV, or one whose
+Blueprint profile expects an AccessToken, gets a warning to turn IP Remote on.
 
 Switching on is **Wake-on-LAN**, which needs the MAC address. A scan fills it in; it's also
 what Blueprint wants under the TV's IP address for Savant's own power-on.
@@ -101,7 +105,7 @@ upload, the page picks up the changes within 30 seconds, or at once with **Check
 ## Scanning
 
 A scan lists the addresses in use on the host's networks (from the ARP table, after nudging each
-address), asks those on the brand's ports (Samsung 8001, 1516, 55000; LG 9761; Sony 80), and
+address), asks those on the brand's ports (Samsung 8001, 1516, 1515, 55000; LG 9761; Sony 80), and
 asks the network with SSDP. Each device that answers is asked who it is. It takes a few
 seconds. A TV on another VLAN can be added by its IP instead.
 
@@ -114,7 +118,7 @@ All outgoing, from the Pro Host to the TVs:
 
 | Brand | Ports |
 |---|---|
-| Samsung | 1516 (IP Control, HTTPS), 8001/8002 (Smart View), 55000 (legacy), SSDP 1900/UDP |
+| Samsung | 1516 and 1515 (IP Control, HTTPS), 8001/8002 (Smart View), 55000 (legacy), SSDP 1900/UDP |
 | LG | 9761 (IP control), SSDP 1900/UDP |
 | Sony | 80 (REST and IRCC), SSDP 1900/UDP |
 | All | Wake-on-LAN, UDP 9 and 7 (broadcast) |

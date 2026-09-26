@@ -214,7 +214,36 @@ test('Samsung 2020+ with IP Remote off: warns, and pairs SplycedBoard\'s remote 
   }
 });
 
-test('Samsung 2016–2019: Smart View pairing on Allow, then key presses with the token', async () => {
+test('Samsung 2016–2019 with IP Remote on: the AccessToken comes from port 1515, and the remote uses it there', async () => {
+  const info = await mocks.samsungInfo(); // 2018 Frame, UN55LS03N
+  const ip = await mocks.samsungIpControl({ token: 'TOKEN-2018' });
+  samsungSv.PORTS.api = info.port;
+  samsungIp.PORTS.ipControl2016 = ip.port; // 1515 on a real TV; 1516 stays closed
+  try {
+    const tv = await addTv('samsungtv');
+    assert.equal(tv.year, 2018);
+    assert.equal(tv.info.ipControl, true);
+    assert.equal(tv.info.ipControlPort, ip.port);
+    const done = await waitJob('samsungtv', (await hub.post(`/api/samsungtv/tvs/${tv.id}/pair`)).json);
+    assert.equal(done.state, 'done', done.message);
+    assert.equal(done.key, 'TOKEN-2018', 'Savant\'s AccessToken, not a Smart View token');
+    const paired = (await hub.get('/api/samsungtv/tvs')).json.tvs[0];
+    assert.equal(paired.key, 'TOKEN-2018');
+    assert.equal(paired.extra.smartViewToken, undefined);
+    await command('samsungtv', tv, 'vol_up');
+    await command('samsungtv', tv, 'hdmi3');
+    assert.deepEqual([ip.state.volume, ip.state.input], [13, 'HDMI3']);
+    assert.ok(ip.calls.every((c) => c.method === 'createAccessToken' || c.params.AccessToken === 'TOKEN-2018'));
+  } finally {
+    await removeAll('samsungtv');
+    samsungSv.PORTS.api = closedPort;
+    samsungIp.PORTS.ipControl2016 = closedPort;
+    await info.close();
+    await ip.close();
+  }
+});
+
+test('Samsung 2016–2019 with IP Remote off: Smart View pairing on Allow, then key presses with the token', async () => {
   const info = await mocks.samsungInfo(); // 2018 Frame, UN55LS03N
   const sv = await mocks.samsungSmartView({ token: 'SV-5678' });
   samsungSv.PORTS.api = info.port;
@@ -227,7 +256,8 @@ test('Samsung 2016–2019: Smart View pairing on Allow, then key presses with th
 
     const done = await waitJob('samsungtv', (await hub.post(`/api/samsungtv/tvs/${tv.id}/pair`)).json);
     assert.equal(done.state, 'done', done.message);
-    assert.match(done.message, /IR or RS-232/);
+    assert.match(done.message, /isn't one Savant uses/);
+    assert.match(done.message, /turn on IP Remote \(Settings → General → Network → Expert Settings\)/, '2016–2019 menu');
     assert.equal(sv.connections[0].searchParams.get('name'), Buffer.from('SplycedBoard').toString('base64'));
     assert.equal(sv.connections[0].searchParams.get('token'), null, 'asks without a token the first time');
 

@@ -48,15 +48,4 @@ function yearFromModel(model) {
   return null;
 }
 
-/**
- * The generations, oldest first, and how SplycedBoard talks to each.
- * `ipControl` is what Savant's own IP profiles use (and what needs the AccessToken).
- */
-function generation(year) {
-  if (!year) return null;
-  if (year >= 2020) return 'ip-control';
-  if (year >= 2016) return 'smart-view';
-  return 'legacy';
-}
-
-module.exports = { yearFromApiModel, yearFromModel, generation };
+module.exports = { yearFromApiModel, yearFromModel };

@@ -2,13 +2,13 @@
 SBTv.mount('samsungtv', {
   brand: 'Samsung',
   keyLabel: 'AccessToken',
-  keyHint: '(for Savant, 2020 and newer TVs)',
+  keyHint: '(for Savant: TVs with IP Remote on)',
   keyPlaceholder: 'None yet: Request token, or paste one',
-  // 2020+ TVs with IP Remote on hand out Savant's AccessToken; older ones pair SplycedBoard's remote.
-  pairLabel: (tv) => (tv.info?.ipControl || (tv.year || 0) >= 2020 || !tv.year ? 'Request token' : 'Pair remote'),
+  // TVs with IP Remote on hand out Savant's AccessToken; the others pair SplycedBoard's own remote.
+  pairLabel: (tv) => (tv.info?.ipControl || (!tv.info?.smartView && !tv.info?.legacy) ? 'Request token' : 'Pair remote'),
   describe(tv) {
     const i = tv.info || {};
-    if (i.ipControl) return 'IP Control';
+    if (i.ipControl) return `IP Control (port ${i.ipControlPort || 1516})`;
     if (i.smartView) return i.frame ? 'Smart View · The Frame' : 'Smart View';
     if (i.legacy) return 'Legacy remote';
     return '';

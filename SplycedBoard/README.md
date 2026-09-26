@@ -222,7 +222,7 @@ service first, because both need the same ports.
 
 Outgoing: Lutron processors on 8081 (LEAP) and 8083 (pairing); Apple TVs on 49153
 (Companion) and 5353/UDP (discovery). The TV tools reach TVs on their own ports (Samsung 1516,
-8001/8002, 55000; LG 9761; Sony 80), SSDP 1900/UDP and Wake-on-LAN; see
+1515, 8001/8002, 55000; LG 9761; Sony 80), SSDP 1900/UDP and Wake-on-LAN; see
 [docs/tv-tools.md](docs/tv-tools.md#ports).
 
 The dashboard and ports have no authentication, so anything on the LAN can reach them. That

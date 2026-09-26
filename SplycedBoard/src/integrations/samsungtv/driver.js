@@ -1,14 +1,16 @@
 /**
  * Samsung TVs, every generation:
  *
- *   2020 and newer   IP Control (port 1516, "IP Remote" on): the AccessToken Savant's profiles
- *                    use. SplycedBoard asks the TV for it; someone picks Allow on the TV.
- *   2016–2019        Smart View (ports 8001/8002): Savant controls these by IR or RS-232, so
- *                    there's no AccessToken for Blueprint; SplycedBoard pairs its own remote.
+ *   IP Control       with "IP Remote" on: port 1516 on 2020 and newer, port 1515 on the 2016–2019
+ *                    models that have it (MU, NU, RU, Q7F–Q9F, Q50R–Q950R, The Frame…). The
+ *                    AccessToken Savant's profiles use: SplycedBoard asks the TV for it, and
+ *                    someone picks Allow on the TV.
+ *   Smart View       ports 8001/8002, every Tizen TV (2016 and newer): SplycedBoard's own remote
+ *                    when IP Control is off or missing. Its token isn't one Savant uses.
  *   2010–2015        the legacy remote (port 55000): the TV asks once whether to allow it.
  *
- * A TV's record (core/tv/tool.js) keeps the AccessToken as `key`, and in `extra`:
- *   smartViewToken, smartViewPaired, legacyAllowed.
+ * A TV's record (core/tv/tool.js) keeps the AccessToken as `key`, `info.ipControlPort`, and in
+ * `extra`: smartViewToken, smartViewPaired, legacyAllowed.
  */
 const crypto = require('crypto');
 const os = require('os');
@@ -146,6 +148,9 @@ function session(tv) {
   return s;
 }
 
+/** The TV's IP Control port: found by probing; 1516 when it hasn't been (2020+). */
+const portOf = (tv) => tv.info?.ipControlPort || ipcontrol.PORTS.ipControl;
+
 const cleanName = (name) => String(name || '').replace(/^\[TV\]\s*/i, '').trim() || null;
 
 async function portOpen(address, port, known) {
@@ -158,7 +163,7 @@ module.exports = {
   keyLabel: 'AccessToken',
   defaultKey: null,
   keyOptional: true,
-  scanPorts: [smartview.PORTS.api, ipcontrol.PORTS.ipControl, legacy.PORTS.legacy],
+  scanPorts: [smartview.PORTS.api, ipcontrol.PORTS.ipControl, ipcontrol.PORTS.ipControl2016, legacy.PORTS.legacy],
   ssdpTargets: ['urn:samsung.com:device:RemoteControlReceiver:1', 'urn:dial-multiscreen-org:service:dial:1'],
 
   isBlueprintTv: (c) => /samsung/i.test(c.manufacturer) && /monitor|television|display/i.test(c.deviceType || 'HD_monitor'),
@@ -168,11 +173,14 @@ module.exports = {
 
   async probe(address, hint = {}) {
     const ports = hint.ports || [];
-    const [api, ipControl, legacyOpen] = await Promise.all([
+    const [api, open1516, open1515, legacyOpen] = await Promise.all([
       smartview.info(address),
       portOpen(address, ipcontrol.PORTS.ipControl, ports),
+      portOpen(address, ipcontrol.PORTS.ipControl2016, ports),
       portOpen(address, legacy.PORTS.legacy, ports),
     ]);
+    const ipControlPort = open1516 ? ipcontrol.PORTS.ipControl : open1515 ? ipcontrol.PORTS.ipControl2016 : null;
+    const ipControl = Boolean(ipControlPort);
     let upnp = null;
     if (!api) {
       // Not a Tizen TV (or not on). Its UPnP description says what it is; Samsung's remote
@@ -194,6 +202,7 @@ module.exports = {
       power: d.PowerState === 'standby' ? 'standby' : 'on',
       info: {
         ipControl,
+        ipControlPort,
         smartView: Boolean(api),
         tokenAuth: api ? d.TokenAuthSupport === 'true' : null,
         legacy: legacyOpen,
@@ -215,7 +224,7 @@ module.exports = {
 
     if (found.info.ipControl) {
       progress('Look at the TV and pick Allow. You have 30 seconds.');
-      const key = await ipcontrol.createAccessToken(tv.address);
+      const key = await ipcontrol.createAccessToken(tv.address, { port: found.info.ipControlPort });
       return { key, message: 'The TV gave its AccessToken. Copy it into Blueprint: inspect the TV, show State Variables, AccessToken.' };
     }
     if (found.info.smartView) {
@@ -223,10 +232,11 @@ module.exports = {
       const token = await smartview.pair(tv.address, { secure: found.info.tokenAuth !== false });
       sessions.get(tv.id)?.close();
       sessions.delete(tv.id);
-      const why = (found.year || 0) >= 2020
-        ? 'This TV has IP Remote off, so it gave SplycedBoard a remote-only token. For Savant\'s AccessToken, turn on IP Remote (Settings → All Settings → Connection → Network → Expert Settings) and request again.'
-        : 'SplycedBoard can work it now. Savant controls 2016–2019 Samsung TVs by IR or RS-232, so there\'s no AccessToken for Blueprint.';
-      return { extra: { smartViewPaired: true, smartViewToken: token }, message: `Paired over Smart View. ${why}` };
+      return {
+        extra: { smartViewPaired: true, smartViewToken: token },
+        message: 'Paired SplycedBoard\'s remote over Smart View. That token isn\'t one Savant uses: this TV has IP Remote off (or none). '
+          + `For Savant's AccessToken, turn on IP Remote (${ipcontrol.ipRemoteSetting(found.year)}) if the TV has it, then Check and Request token again.`,
+      };
     }
     if (found.info.legacy) {
       progress('Look at the TV and pick Allow for "SplycedBoard".');
@@ -239,7 +249,7 @@ module.exports = {
   async checkKey(tv) {
     if (!tv.key) return { ok: null, message: '' };
     try {
-      await ipcontrol.call(tv.address, 'powerControl', {}, { token: tv.key });
+      await ipcontrol.call(tv.address, 'powerControl', {}, { token: tv.key, port: portOf(tv) });
       return { ok: true, message: '' };
     } catch (err) {
       if (/didn't answer|isn't taking|Couldn't reach/.test(err.message)) return { ok: null, message: `Couldn't check the AccessToken: ${err.message}` };
@@ -260,23 +270,23 @@ module.exports = {
     const via = route(tv);
     if (id === 'power_on') {
       const sent = tv.mac ? await lan.wake(tv.mac, { address: tv.address }) : 0;
-      if (via === 'ip-control') await ipcontrol.call(tv.address, 'powerControl', { power: 'powerOn' }, { token: tv.key, timeoutMs: 2000 }).catch(() => {});
+      if (via === 'ip-control') await ipcontrol.call(tv.address, 'powerControl', { power: 'powerOn' }, { token: tv.key, port: portOf(tv), timeoutMs: 2000 }).catch(() => {});
       return { sent };
     }
     if (via === 'ip-control') {
       if (id === 'mute_toggle') {
-        const { mute } = await ipcontrol.call(tv.address, 'muteControl', {}, { token: tv.key });
-        await ipcontrol.call(tv.address, 'muteControl', { mute: mute === 'muteOn' ? 'muteOff' : 'muteOn' }, { token: tv.key });
+        const { mute } = await ipcontrol.call(tv.address, 'muteControl', {}, { token: tv.key, port: portOf(tv) });
+        await ipcontrol.call(tv.address, 'muteControl', { mute: mute === 'muteOn' ? 'muteOff' : 'muteOn' }, { token: tv.key, port: portOf(tv) });
         return {};
       }
       if (id === 'set_volume') {
         const volume = Math.round(Number(value));
         if (!Number.isFinite(volume) || volume < 0 || volume > 100) throw httpError(400, 'Volume is 0–100');
-        await ipcontrol.call(tv.address, 'directVolumeControl', { volume }, { token: tv.key });
+        await ipcontrol.call(tv.address, 'directVolumeControl', { volume }, { token: tv.key, port: portOf(tv) });
         return {};
       }
       const [method, params] = IP_CONTROL[id];
-      await ipcontrol.call(tv.address, method, params, { token: tv.key });
+      await ipcontrol.call(tv.address, method, params, { token: tv.key, port: portOf(tv) });
       return {};
     }
     if (via === 'smart-view') {
@@ -300,7 +310,7 @@ module.exports = {
 
   async state(tv) {
     if (route(tv) === 'ip-control') {
-      const ask = (method) => ipcontrol.call(tv.address, method, {}, { token: tv.key, timeoutMs: 2500 }).catch(() => null);
+      const ask = (method) => ipcontrol.call(tv.address, method, {}, { token: tv.key, port: portOf(tv), timeoutMs: 2500 }).catch(() => null);
       const [power, volume, mute] = await Promise.all([ask('powerControl'), ask('directVolumeControl'), ask('muteControl')]);
       if (!power) return { power: 'unreachable' };
       return {
@@ -319,7 +329,7 @@ module.exports = {
     const w = [];
     const ipOff = tv.info?.smartView && tv.info.ipControl === false;
     if (ipOff && ((tv.year || 0) >= 2020 || tv.blueprint?.keyVariable)) {
-      w.push('IP Remote is off on this TV, so Savant can\'t control it over IP and it can\'t give an AccessToken. On the TV: Settings → All Settings → Connection → Network → Expert Settings → IP Remote → Enable.');
+      w.push(`IP Remote is off on this TV, so Savant can't control it over IP and it can't give an AccessToken. On the TV: ${ipcontrol.ipRemoteSetting(tv.year)} → IP Remote → Enable, then Check.`);
     }
     return w;
   },

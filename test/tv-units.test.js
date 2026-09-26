@@ -30,7 +30,6 @@ test('Samsung model years: the Tizen code when there is one, else the model numb
     'QN65QN90FAFXZA': 2025, 'UN65U8000FFXZA': 2025, 'QN(XX)Q60T': 2020, '': null, 'HW-Q990D': null,
   };
   for (const [model, year] of Object.entries(cases)) assert.equal(samsungModels.yearFromModel(model), year, model);
-  assert.deepEqual([2012, 2016, 2019, 2020, 2025].map(samsungModels.generation), ['legacy', 'smart-view', 'smart-view', 'ip-control', 'ip-control']);
 });
 
 test('LG and Sony model years', () => {

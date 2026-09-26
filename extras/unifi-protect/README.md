@@ -32,11 +32,14 @@ camera.
 ## Why it's built like this
 
 - **The token can't be a state variable.** Blueprint writes each camera's stream address once,
-  when it builds the configuration: the data table's IP Address (and login) followed by a fixed
-  path from the profile. The Savant app then opens that address itself, straight from the
-  iPad or TV, so the Savant host, where state variables live, is never involved. (A Samsung
-  TV's AccessToken works as a state variable because the host puts it into each command it
-  sends.) So the one thing that differs per camera goes in the IP Address field.
+  when it builds the configuration: the camera table's IP Address (and login) joined to a fixed
+  path from the profile. Savant's camera server on the host (CameraServer, which relays the
+  stream to the app) plays exactly that address from the configuration; it doesn't read state
+  variables. (A Samsung TV's AccessToken works as a state variable because the profile puts it
+  into each command the host sends.) So the one thing that differs per camera goes in the IP
+  Address field.
+- **When a camera stays black,** the host's `/var/log/system.log` has CameraServer's reason,
+  with the address it tried: `Failed to open rtsp://… for RTSP DESCRIBE`.
 - **Port 7447, not 7441.** Protect serves every stream twice: encrypted on 7441 (`rtsps://`,
   and `?enableSrtp` encrypts the video too) and plain on 7447. Blueprint only builds `rtsp://`
   addresses, and `?enableSrtp` switches on SRTP even on 7447, so neither works in Savant.

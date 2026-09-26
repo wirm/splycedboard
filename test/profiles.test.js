@@ -16,6 +16,12 @@ const { SLOTS, LED_SLOTS } = require('../SplycedBoard/src/integrations/lutron/fe
 const ROOT = path.join(__dirname, '..');
 const PROFILES = path.join(ROOT, 'SplycedBoard', 'profiles');
 const files = fs.readdirSync(PROFILES).filter((f) => f.endsWith('.xml'));
+// Standalone profiles kept in the repository (extras/<topic>/*.xml): not shipped with
+// SplycedBoard, but held to the same naming, schema and version rules.
+const EXTRAS = path.join(ROOT, 'extras');
+const extraFiles = fs.readdirSync(EXTRAS, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .flatMap((d) => fs.readdirSync(path.join(EXTRAS, d.name)).filter((f) => f.endsWith('.xml')).map((f) => path.join('extras', d.name, f)));
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 function rootAttributes(xml) {
@@ -32,14 +38,37 @@ test('there are profiles to check', () => {
   assert.ok(files.length > 0);
 });
 
-for (const file of files) {
+for (const file of [...files.map((f) => path.join('SplycedBoard', 'profiles', f)), ...extraFiles]) {
   test(`${file} is named <manufacturer>_<model>.xml, which is how Blueprint finds it`, () => {
-    const attrs = rootAttributes(fs.readFileSync(path.join(PROFILES, file), 'utf8'));
+    const attrs = rootAttributes(fs.readFileSync(path.join(ROOT, file), 'utf8'));
     assert.ok(attrs.manufacturer && attrs.model, 'manufacturer and model are required');
     assert.ok(attrs.rpm_xml_version, 'rpm_xml_version (the profile version) is required');
-    assert.equal(file, `${attrs.manufacturer}_${attrs.model}`.toLowerCase() + '.xml');
+    assert.equal(path.basename(file), `${attrs.manufacturer}_${attrs.model}`.toLowerCase() + '.xml');
   });
 }
+
+test('a standalone profile that changed since the last release has a higher version', (t) => {
+  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  let tag;
+  try {
+    tag = git('describe', '--tags', '--abbrev=0').trim();
+  } catch {
+    return t.skip('no release tag to compare with');
+  }
+  for (const file of extraFiles) {
+    let before;
+    try {
+      before = git('show', `${tag}:${file}`);
+    } catch {
+      continue; // new since the tag
+    }
+    const xml = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    if (before === xml) continue;
+    const was = rootAttributes(before).rpm_xml_version;
+    const now = rootAttributes(xml).rpm_xml_version;
+    assert.equal(compareVersions(now, was), 1, `${file} changed since ${tag} but its rpm_xml_version is still ${now} (was ${was}): bump it and add a Change Log line`);
+  }
+});
 
 test('each integration names a profile that exists', () => {
   for (const { id, profile } of manifests()) {
@@ -202,10 +231,10 @@ const TOLERATED = [
 test("profiles validate against Blueprint's schema", (t) => {
   const xsd = blueprintSchema();
   if (!xsd) return t.skip('Blueprint is not installed here');
-  for (const file of files) {
+  for (const file of [...files.map((f) => path.join(PROFILES, f)), ...extraFiles.map((f) => path.join(ROOT, f))]) {
     let out = '';
     try {
-      execFileSync('xmllint', ['--noout', '--schema', xsd, path.join(PROFILES, file)], { stdio: ['ignore', 'pipe', 'pipe'] });
+      execFileSync('xmllint', ['--noout', '--schema', xsd, file], { stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       out = String(err.stderr);
     }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.1">
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.2">
     <notes>
         Any camera adopted in UniFi Protect (G6, G5, G4, AI...), streamed from the Protect console
         (the UniFi OS console or NVR), not from the camera itself. One component per camera.
@@ -11,17 +11,22 @@
            stream quality you want (High is usual). Protect shows an address like
                rtsps://192.168.5.1:7441/Esg1HhMEGKeVBUnU?enableSrtp
            The part between the last "/" and the "?" is this camera's stream token.
-        3) In Blueprint, add one of these components per camera. In the Security Camera data
-           table, set the camera's IP Address to the console's address, port 7447, and the token:
-               192.168.5.1:7447/Esg1HhMEGKeVBUnU
+        3) In Blueprint, add one of these components per camera. Savant takes a camera's address
+           from its camera table (Camera, Logical Component, IP Address, User Login, Password,
+           Enable H.264), not from the network connection. In that table, for this camera:
+             IP Address     the console's address, port 7447 and the token:
+                            192.168.5.1:7447/Esg1HhMEGKeVBUnU
+             User Login     empty
+             Password       empty (Protect's RTSP doesn't ask for them)
+             Enable H.264   on: this profile's streams are H.264 only
            Port 7447 is Protect's plain RTSP. Don't use port 7441 or "?enableSrtp": they encrypt
-           the stream, which Savant can't play. Leave the user name and password empty: Protect's
-           RTSP doesn't ask for them.
+           the stream, which Savant can't play.
 
         The thumbnail and fullscreen views play the same stream. For lighter thumbnails with many
         cameras, use the camera's Medium or Low stream token instead.
 
 		====================== Change Log ==================
+		Version: 1.2 Change: Notes: the camera table's fields, with Enable H.264 on.  Risk: Low Importance: Helpful
 		Version: 1.1 Change: Notes: set the camera's stream to "Standard" in Protect's Recording Manager (H.264; "Enhanced" is H.265, which Savant can't play).  Risk: Low Importance: Critical
 		Version: 1.0 Change: First version: RTSP from the UniFi Protect console, with each camera's stream token in the Security Camera data table.  Risk: Low Importance: Critical
     </notes>

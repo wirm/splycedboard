@@ -18,14 +18,15 @@ camera.
    `rtsps://192.168.5.1:7441/Esg1HhMEGKeVBUnU?enableSrtp`. The part between the last `/` and
    the `?` (`Esg1HhMEGKeVBUnU`) is that camera's stream token.
 3. **Blueprint:** add the profile to your library (Preferences), then one **UniFi Protect Camera
-   (Splyced)** component per camera. In the Security Camera data table, set each camera's
-   **IP Address** to the console's address, port **7447**, and its token:
+   (Splyced)** component per camera. Savant takes a camera's address from its camera table
+   (Camera, Logical Component, IP Address, User Login, Password, Enable H.264), not from the
+   network connection. For each camera there:
 
-   ```
-   192.168.5.1:7447/Esg1HhMEGKeVBUnU
-   ```
-
-   Leave the user name and password empty.
+   | | |
+   |---|---|
+   | IP Address | the console's address, port **7447**, and its token: `192.168.5.1:7447/Esg1HhMEGKeVBUnU` |
+   | User Login, Password | empty |
+   | Enable H.264 | on: this profile's streams are H.264 only |
 4. Upload the configuration.
 
 ## Why it's built like this

@@ -102,20 +102,29 @@ app, by a scene, or on SplycedBoard's dashboard. This needs profile 1.13 or late
 
 From profile 1.16, Savant hears each keypad button being used, so a Savant trigger can react
 the moment a Lutron button is pressed: for instance, one whose programming changes a Lutron
-variable.
+variable. What the state holds below is from profile 1.17.
 
 - **The state.** Each button has `ButtonEvent_<device>_<button>` in Savant's State Center, e.g.
   `ButtonEvent_501_6`: the device and button number are Address1 and Address2 on the Keypads
   tab. A button's state appears once it has been used.
-- **What it holds.** What the button just did, as the processor reports it for that button's
-  programming: `Press`, `Release`, `Hold` or `MultiTap`. A toggle button, for instance,
-  reports `Release`, and `MultiTap` for a double tap. On the next poll it goes back to `None`,
-  so the same press twice is two changes.
+- **What it holds.** What the button did last, and it stays there, like `CurrentButtonStatus`
+  in Savant's own Lutron profiles:
+  - a tap: `Press`, then `Release`;
+  - a hold: `Hold` until it's let go (after `Press`, when the processor reports one), then
+    `Release`;
+  - a double tap: `MultiTap`.
+
+  SplycedBoard sends a button only when it's used, and never `None`. A HomeWorks QSX reports
+  a tap only once it's over, as a `Release`; SplycedBoard still sends `Press` first, then the
+  `Release` at least 200 ms later (the gap Savant's Lutron profiles leave between press and
+  release), so every tap is a change.
 - **In Blueprint.** Add a state trigger on
-  `<your Lutron component>.Lighting_controller.ButtonEvent_501_6` being equal to `Release`
-  (or `MultiTap`…), and have it run what should happen.
-- **Timing.** Button events go ahead of level and LED feedback, so Savant sees them within half
-  a second; each button's events go out one per poll, in order.
+  `<your Lutron component>.Lighting_controller.ButtonEvent_501_6` being equal to `Press`
+  (or `Hold`, `MultiTap`), and have it run what should happen. It fires on every press: no
+  State Setter is needed to reset the state, as it is with RadioRA 2's `CurrentButtonStatus`.
+- **Timing.** Button events go ahead of level and LED feedback, so Savant sees a press within
+  half a second. Each button's events go out one per poll, in order, so a tap's `Release`
+  follows its `Press` half a second later.
 - **Telnet bridge.** The HomeWorks QS–style telnet port sends them too: `~DEVICE,<device>,<button>,3`
   (press), `4` (release), `5` (hold), `6` (multi-tap).
 

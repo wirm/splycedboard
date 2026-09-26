@@ -6,7 +6,7 @@
 require('./support/harness');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ZoneFeedback, SLOTS, LED_SLOTS, BUTTON_SLOTS, BUTTON_IDLE, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
+const { ZoneFeedback, SLOTS, LED_SLOTS, BUTTON_SLOTS, PRESS_MS, IDLE_MS, RESYNC_MS } = require('../SplycedBoard/src/integrations/lutron/feedback');
 
 function setup(levels = { 101: 75, 102: 0, 201: 40 }, leds = []) {
   const controller = {
@@ -149,52 +149,81 @@ function buttonsIn(answer) {
   return [...new Map(out).entries()];
 }
 
-test('button events go out first, keyed device_button, and back to None on the next poll', () => {
-  const { feedback, set } = setup();
+/** Savant asking every half second until there's nothing left: the answers with buttons, in order. */
+function buttonAnswers(feedback, clock, address = '10.0.0.5') {
+  const seen = [];
+  for (let answer = feedback.poll(address); Object.keys(answer).length; answer = feedback.poll(address)) {
+    if ('b0' in answer) seen.push(buttonsIn(answer));
+    clock.t += 500;
+  }
+  return seen;
+}
+
+test('button events go out first, keyed device_button: a tap reported as a Release is Press, then Release, and stays', () => {
+  const { feedback, set, clock } = setup();
   feedback.poll('10.0.0.5'); // the levels
   set(101, 20);
-  feedback.buttonEvent(501, 6, 'Release');
-  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Release']], 'ahead of the level that changed');
-  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', BUTTON_IDLE]], 'then None, so the next Release is a change');
-  assert.deepEqual(levels(feedback.poll('10.0.0.5')), { 101: 20 }, 'then the level');
-  assert.deepEqual(feedback.poll('10.0.0.5'), {});
+  feedback.buttonEvent(501, 6, 'Release'); // how a HomeWorks QSX reports a tap
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Press']], 'ahead of the level that changed');
+  assert.deepEqual(levels(feedback.poll('10.0.0.5')), { 101: 20 }, 'the level goes while the Release waits');
+  clock.t += PRESS_MS - 1;
+  assert.deepEqual(feedback.poll('10.0.0.5'), {}, `the Release waits ${PRESS_MS} ms`);
+  clock.t += 1;
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Release']]);
+  clock.t += 500;
+  assert.deepEqual(feedback.poll('10.0.0.5'), {}, 'and that is the last word: it stays Release');
 });
 
-test('one event per button per answer, so Savant sees each one; other buttons ride along', () => {
-  const { feedback } = setup();
+test('a hold is Hold until the Release, with the Press first when the processor reports one', () => {
+  const { feedback, clock } = setup();
   feedback.poll('10.0.0.5');
-  feedback.buttonEvent(501, 6, 'Release');
-  feedback.buttonEvent(501, 6, 'MultiTap');
-  feedback.buttonEvent(502, 1, 'Press');
-  const seen = [];
-  for (let answer = feedback.poll('10.0.0.5'); Object.keys(answer).length; answer = feedback.poll('10.0.0.5')) seen.push(buttonsIn(answer));
-  assert.deepEqual(seen, [
-    [['501_6', 'Release'], ['502_1', 'Press']],
-    [['501_6', BUTTON_IDLE], ['502_1', BUTTON_IDLE]],
+  feedback.buttonEvent(501, 1, 'Press');
+  feedback.buttonEvent(501, 1, 'Hold');
+  feedback.buttonEvent(501, 1, 'LongHold'); // still held
+  feedback.buttonEvent(501, 2, 'Hold'); // held, with no Press reported
+  assert.deepEqual(buttonAnswers(feedback, clock), [[['501_1', 'Press'], ['501_2', 'Hold']], [['501_1', 'Hold']]]);
+  feedback.buttonEvent(501, 1, 'Release');
+  feedback.buttonEvent(501, 2, 'Release');
+  assert.deepEqual(buttonAnswers(feedback, clock), [[['501_1', 'Release'], ['501_2', 'Release']]], 'let go: Release, with no Press before it');
+});
+
+test('a value never follows itself, so every tap is a change: Press between two Releases, and between two MultiTaps', () => {
+  const { feedback, clock } = setup();
+  feedback.poll('10.0.0.5');
+  feedback.buttonEvent(501, 6, 'Release'); // a tap
+  feedback.buttonEvent(501, 6, 'Release'); // another
+  feedback.buttonEvent(501, 6, 'MultiTap'); // a double tap: QSX reports its second tap so
+  feedback.buttonEvent(501, 6, 'MultiTap'); // and another
+  feedback.buttonEvent(502, 1, 'Release'); // other buttons ride along
+  assert.deepEqual(buttonAnswers(feedback, clock), [
+    [['501_6', 'Press'], ['502_1', 'Press']],
+    [['501_6', 'Release'], ['502_1', 'Release']],
+    [['501_6', 'Press']],
+    [['501_6', 'Release']],
     [['501_6', 'MultiTap']],
-    [['501_6', BUTTON_IDLE]],
+    [['501_6', 'Press']],
+    [['501_6', 'MultiTap']],
   ]);
+  assert.ok(!JSON.stringify(buttonAnswers(feedback, clock)).includes('None'));
 });
 
-test(`more than ${BUTTON_SLOTS} buttons at once go out ${BUTTON_SLOTS} at a time`, () => {
+test(`more than ${BUTTON_SLOTS} buttons at once go out ${BUTTON_SLOTS} at a time, in order`, () => {
   const { feedback } = setup();
   feedback.poll('10.0.0.5');
-  for (let b = 1; b <= BUTTON_SLOTS + 2; b++) feedback.buttonEvent(501, b, 'Release');
-  const first = buttonsIn(feedback.poll('10.0.0.5'));
-  assert.equal(first.length, BUTTON_SLOTS);
-  const second = buttonsIn(feedback.poll('10.0.0.5'));
-  assert.deepEqual(second.filter(([, e]) => e === 'Release').map(([k]) => k), ['501_9', '501_10'], 'the rest go ahead of the resets');
-  assert.equal(second.filter(([, e]) => e === BUTTON_IDLE).length, BUTTON_SLOTS - 2, 'resets fill what\'s left');
+  for (let b = 1; b <= BUTTON_SLOTS + 2; b++) feedback.buttonEvent(501, b, 'Press');
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')).map(([key]) => key), Array.from({ length: BUTTON_SLOTS }, (_, i) => `501_${i + 1}`));
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_9', 'Press'], ['501_10', 'Press']]);
+  assert.deepEqual(feedback.poll('10.0.0.5'), {});
 });
 
 test('button events only go to hosts asking now: a host that starts later gets none from before', () => {
   const { feedback, clock } = setup();
   feedback.poll('10.0.0.5');
-  feedback.buttonEvent(501, 6, 'Release');
+  feedback.buttonEvent(501, 6, 'Press');
   assert.ok('z0' in feedback.poll('10.0.0.9'), 'a new host gets the levels, not the old press');
-  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Release']]);
+  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', 'Press']]);
   clock.t += IDLE_MS + 1;
   feedback.buttonEvent(501, 6, 'Release');
-  assert.deepEqual(buttonsIn(feedback.poll('10.0.0.5')), [['501_6', BUTTON_IDLE]], 'nor one that stopped asking: only the reset it was owed');
+  assert.ok(!('b0' in feedback.poll('10.0.0.5')), 'nor one that stopped asking');
 });
 

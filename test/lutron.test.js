@@ -125,7 +125,7 @@ test('feedback: keypad LEDs follow the levels, keyed device_LED, and change when
   assert.deepEqual(ledsIn(next), { '501_804': 1 });
 });
 
-test('feedback: keypad button events reach Savant for triggers, each followed by None', async () => {
+test('feedback: keypad button events reach Savant for triggers, and the state stays on the last', async () => {
   const poll = async () => (await hub.get('/api/lutron/feedback')).json;
   while (Object.keys(await poll()).length) { /* catch up */ }
   const buttonsIn = (answer) => [...new Map(Object.keys(answer).filter((k) => /^b\d+$/.test(k)).map((k) => [answer[k], answer[`e${k.slice(1)}`]]))];
@@ -135,9 +135,11 @@ test('feedback: keypad button events reach Savant for triggers, each followed by
   await h.waitFor(async () => {
     const a = await poll();
     if ('b0' in a) seen.push(...buttonsIn(a));
-    return seen.length >= 4;
+    return seen.length >= 2;
   }, { what: 'button events' });
-  assert.deepEqual(seen.slice(0, 4), [['501_4', 'Press'], ['501_4', 'None'], ['501_4', 'Release'], ['501_4', 'None']]);
+  assert.deepEqual(seen, [['501_4', 'Press'], ['501_4', 'Release']], 'as the processor reported them');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(!('b0' in await poll()), 'and nothing after: the state stays Release');
 });
 
 test('zone, area, shade and scene endpoints drive the processor', async () => {

@@ -4,7 +4,7 @@
     manufacturer="Lutron"
     model="LEAP Bridge"
     device_class="Lighting_controller"
-    rpm_xml_version="1.16"
+    rpm_xml_version="1.17"
     minimum_component_engine_version="7.2">
     <notes>
         Lutron LEAP Bridge — Custom Savant profile for HomeWorks QSX and RadioRA 3.
@@ -41,13 +41,18 @@
           each load is asked for its level (QueryDimmerLevel, read by ZoneLevel).
 
         Button events, for Savant triggers:
-          ButtonFeedback sets ButtonEvent_(device)_(button) to what a keypad button did
-          (Press, Release, Hold, MultiTap: whichever the processor reports for that button's
-          programming), then back to None on the next poll, so each event is a change.
+          ButtonFeedback sets ButtonEvent_(device)_(button) to what a keypad button did last,
+          like CurrentButtonStatus in Savant's Lutron profiles, and it stays there: a tap is
+          Press, then Release; a hold is Hold until let go, then Release; a double tap ends
+          on MultiTap. SplycedBoard sends a button only when it's used. A tap the processor
+          reports only as a Release still goes Press, then Release (200 ms apart at least),
+          so every press is a change and a trigger on Press fires each time.
           Device and button are Address1 and Address2 on SplycedBoard's Keypads tab, e.g.
-          ButtonEvent_501_6. Trigger on it being equal to Release (or MultiTap…).
+          ButtonEvent_501_6. Trigger on it being equal to Press (or Hold, MultiTap…).
 
         ====================== Change Log ======================
+        Version 1.17 Change: ButtonEvent_(device)_(button) stays on what the button did last, never None: a tap is
+                             Press then Release, a hold is Hold until the Release. It starts as Release.
         Version 1.16 Add: keypad button events for Savant triggers. SplycedBoard's feedback answers carry
                              button events first, and the ButtonFeedback status message sets
                              ButtonEvent_(device)_(button) to Press, Release, Hold or MultiTap, then None.
@@ -246,7 +251,7 @@
         <state_variable name="FeedbackLEDKey15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDKey15" state_center_type="string"></state_variable>
         <state_variable name="FeedbackLEDOn15" owning_logical_component="Lighting_controller" state_center_binding="FeedbackLEDOn15" state_center_type="boolean"></state_variable>
         <!-- Keypad button events for Savant triggers: ButtonFeedback writes ButtonEvent_(device)_(button). -->
-        <dynamic_state_variable name="ButtonEvent" owning_logical_component="Lighting_controller" state_center_binding="ButtonEvent" state_center_type="string">None</dynamic_state_variable>
+        <dynamic_state_variable name="ButtonEvent" owning_logical_component="Lighting_controller" state_center_binding="ButtonEvent" state_center_type="string">Release</dynamic_state_variable>
         <state_variable name="FeedbackButtonKey0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey0" state_center_type="string"></state_variable>
         <state_variable name="FeedbackButtonEvent0" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonEvent0" state_center_type="string"></state_variable>
         <state_variable name="FeedbackButtonKey1" owning_logical_component="Lighting_controller" state_center_binding="FeedbackButtonKey1" state_center_type="string"></state_variable>
@@ -1896,7 +1901,7 @@
                     <command response_required="no">
                         <command_string type="character" http_request_type="GET">api/hub/profile-report</command_string>
                         <parameter_list>
-                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.16]]></parameter>
+                            <parameter parameter_data_type="character"><![CDATA[?integration=lutron&version=1.17]]></parameter>
                         </parameter_list>
                     </command>
                 </command_interface>

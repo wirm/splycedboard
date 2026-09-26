@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.3">
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="racepoint_component_profile.xsd" manufacturer="Ubiquiti" model="UniFi Protect Camera (Splyced)" alias="UniFi Protect, G6, G5, G4, AI" device_class="Security_camera_fixed" minimum_component_engine_version="9.1" rpm_xml_version="1.4">
     <notes>
         Any camera adopted in UniFi Protect (G6, G5, G4, AI...), streamed from the Protect console
         (the UniFi OS console or NVR), not from the camera itself. One component per camera.
@@ -8,7 +8,8 @@
         1) In UniFi Protect's Recording Manager, set the camera's stream to "Standard". Savant
            plays H.264: "Enhanced" streams H.265, and the camera stays black in the Savant app.
         2) In UniFi Protect, open the camera, then Settings, Advanced, and turn on RTSP for the
-           stream quality you want (High is usual). Protect shows an address like
+           Medium stream: it plays smoothly in Savant, where a G6's High (4K) stream is heavy.
+           Each quality has its own token. Protect shows an address like
                rtsps://192.168.5.1:7441/Esg1HhMEGKeVBUnU?enableSrtp
            The part between the last "/" and the "?" is this camera's stream token.
         3) In Blueprint, add one of these components per camera. Savant takes a camera's address
@@ -23,10 +24,11 @@
            Port 7447 is Protect's plain RTSP. Don't use port 7441 or "?enableSrtp": they encrypt
            the stream, which Savant can't play.
 
-        The thumbnail and fullscreen views play the same stream. For lighter thumbnails with many
-        cameras, use the camera's Medium or Low stream token instead.
+        The thumbnail and fullscreen views play the same stream. With many cameras on screen, the
+        Low stream's token is lighter still.
 
 		====================== Change Log ==================
+		Version: 1.4 Change: Notes: use the Medium stream (a G6's High stream is 4K, heavy for Savant); each quality has its own token.  Risk: Low Importance: Helpful
 		Version: 1.3 Change: Stream path "/", so Blueprint builds rtsp://IP Address exactly (the "?" path came out as "/?", which Protect refuses). Notes: no rtsp:// in the IP Address.  Risk: Low Importance: Critical
 		Version: 1.2 Change: Notes: the camera table's fields, with Enable H.264 on.  Risk: Low Importance: Helpful
 		Version: 1.1 Change: Notes: set the camera's stream to "Standard" in Protect's Recording Manager (H.264; "Enhanced" is H.265, which Savant can't play).  Risk: Low Importance: Critical

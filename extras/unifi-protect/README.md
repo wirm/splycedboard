@@ -13,8 +13,9 @@ camera.
 
 1. **Protect, Recording Manager:** set the camera's stream to **Standard**. Savant plays H.264;
    **Enhanced** streams H.265, and the camera stays black in the Savant app.
-2. **Protect:** open the camera → Settings → Advanced, and turn on RTSP for the quality you
-   want (High is usual). Protect shows something like
+2. **Protect:** open the camera → Settings → Advanced, and turn on RTSP for the **Medium**
+   stream: it plays smoothly in Savant, where a G6's High (4K) stream is heavy. Each quality has
+   its own token. Protect shows something like
    `rtsps://192.168.5.1:7441/Esg1HhMEGKeVBUnU?enableSrtp`. The part between the last `/` and
    the `?` (`Esg1HhMEGKeVBUnU`) is that camera's stream token.
 3. **Blueprint:** add the profile to your library (Preferences), then one **UniFi Protect Camera
@@ -52,8 +53,9 @@ camera.
 - **Standard, not Enhanced.** Savant's camera profiles play H.264. Protect's Recording Manager
   streams a camera set to Enhanced as H.265 (same token, different video), which Savant can't
   show; Standard is H.264.
-- **One stream per camera.** The thumbnail and fullscreen views play the same stream. With many
-  cameras on screen, the Medium or Low stream's token is lighter.
+- **One stream per camera, Medium.** The thumbnail and fullscreen views play the same stream.
+  On the Beta Host, the G6's High (4K) stream was heavy for Savant and Medium plays smoothly;
+  with many cameras on screen, Low is lighter still.
 
 ## Checked
 
@@ -62,5 +64,5 @@ and `…/<token>?` answer; `…/<token>/` doesn't; with `?enableSrtp` the stream
 SRTP keys (`a=crypto`); a login in the address is ignored; set to Standard, a G6 streams
 H.264 (Enhanced: H.265). On the Beta Host, Blueprint compiled version 1.2 with
 `rtsp://192.168.5.1:7447/<token>` typed in as `rtsp://rtsp:/192.168.5.1:7447/<token>/?`, which is
-how the joining above was found. Still to check in Savant: 1.3 with the address typed
-without `rtsp://`, and the picture in the Savant app.
+how the joining above was found. With 1.3 and the address typed without `rtsp://`, the G6's
+Medium stream (`_1`, H.264) plays in the Savant app.

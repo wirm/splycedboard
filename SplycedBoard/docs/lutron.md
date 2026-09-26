@@ -104,9 +104,9 @@ From profile 1.16, Savant hears each keypad button being used, so a Savant trigg
 the moment a Lutron button is pressed: for instance, one whose programming changes a Lutron
 variable.
 
-- **The state.** Each button has `ButtonEvent_<device>_<button>`, e.g. `ButtonEvent_501_6`
-  (Address1 and Address2 on the Keypads tab, whose "Savant addresses" table lists every
-  button's trigger state).
+- **The state.** Each button has `ButtonEvent_<device>_<button>` in Savant's State Center, e.g.
+  `ButtonEvent_501_6`: the device and button number are Address1 and Address2 on the Keypads
+  tab. A button's state appears once it has been used.
 - **What it holds.** What the button just did, as the processor reports it for that button's
   programming: `Press`, `Release`, `Hold` or `MultiTap`. A toggle button, for instance,
   reports `Release`, and `MultiTap` for a double tap. On the next poll it goes back to `None`,

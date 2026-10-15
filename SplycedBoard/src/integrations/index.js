@@ -18,6 +18,7 @@ const INTEGRATIONS = [
   'lutron',
   'appletv',
   'scli',
+  'dsc', // proof of concept: remove this line and src/integrations/dsc/ to take it out
   // Tools (manifest "category": "tool"): the dashboard lists them under Tools
   'samsungtv',
   'lgtv',

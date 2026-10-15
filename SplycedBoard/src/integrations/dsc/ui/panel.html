@@ -1,0 +1,82 @@
+<div class="panel-header">
+  <div>
+    <div class="panel-title">DSC PowerSeries Pro</div>
+    <div class="panel-subtitle">ITv2 integration · proof of concept, no Savant profile yet</div>
+  </div>
+  <div class="status-badge">
+    <div class="status-dot" id="dscStatusDot"></div>
+    <span id="dscStatusText">Not connected</span>
+  </div>
+</div>
+
+<nav class="subnav">
+  <button class="tab-btn active" data-tab="panel">Panel</button>
+  <button class="tab-btn" data-tab="connection">Connection</button>
+  <button class="tab-btn" data-tab="messages">Messages</button>
+</nav>
+
+<!-- ═══════════════════════════════ PANEL ═══════════════════════════════════ -->
+<div class="tab-pane active" data-pane="panel">
+  <div id="dscPartitions" class="dsc-partitions"></div>
+
+  <div class="card">
+    <div class="dsc-card-head">
+      <div class="card-title">Zones</div>
+      <label class="dsc-check"><input type="checkbox" id="dscOpenOnly"> Open or in alarm only</label>
+    </div>
+    <div id="dscZones"></div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════ CONNECTION ════════════════════════════════ -->
+<div class="tab-pane" data-pane="connection">
+  <div class="card">
+    <div class="dsc-card-head">
+      <div class="card-title">Session</div>
+      <button class="btn btn-ghost btn-sm" onclick="Dsc.refresh()">↻ Ask the panel again</button>
+    </div>
+    <div id="dscSession" class="dsc-kv"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Settings</div>
+    <div class="note" id="dscDialNote">The panel's communicator dials SplycedBoard: program it with this host's IP as its
+      integration server, and the port below as its notification port.</div>
+    <div class="form-group">
+      <label for="dscPort">Port SplycedBoard listens on</label>
+      <input type="number" id="dscPort" min="1" max="65535" placeholder="3072">
+      <div class="dsc-hint">The communicator's integration notification port, section [851][429] (default 3072).</div>
+    </div>
+    <div class="form-group">
+      <label for="dscIntegrationId">Integration identification number</label>
+      <input type="text" id="dscIntegrationId" autocomplete="off" spellcheck="false" maxlength="12" placeholder="12 characters">
+      <div class="dsc-hint">Section [851][422], read-only on the panel. Shown in Session once the panel connects.</div>
+    </div>
+    <div class="form-group">
+      <label for="dscAccessCode">Integration access code</label>
+      <input type="password" id="dscAccessCode" autocomplete="new-password" spellcheck="false" maxlength="40">
+      <div class="dsc-hint" id="dscAccessCodeHint"></div>
+      <div class="dsc-hint">Type 1: 8 hex digits, [851][423]. Type 2: 32 hex digits ([423] on a PowerSeries Pro, [700] on a Neo).
+        The panel picks the type ([425] option 4).</div>
+    </div>
+    <button class="btn btn-primary" onclick="Dsc.saveSettings()">Save and restart the session</button>
+    <div class="alert" id="dscSettingsAlert" style="margin-top:14px;margin-bottom:0"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ MESSAGES ═════════════════════════════════ -->
+<div class="tab-pane" data-pane="messages">
+  <div class="card">
+    <div class="dsc-card-head">
+      <div class="card-title">Messages</div>
+      <div class="dsc-log-tools">
+        <label class="dsc-check"><input type="checkbox" id="dscShowPolls"> Show polls and acks</label>
+        <label class="dsc-check"><input type="checkbox" id="dscShowHex" checked> Bytes</label>
+        <button class="btn btn-ghost btn-sm" onclick="Dsc.copyLog()">Copy</button>
+        <button class="btn btn-ghost btn-sm" onclick="Dsc.clearLog()">Clear</button>
+      </div>
+    </div>
+    <div class="note">Every ITv2 message to and from the panel, decrypted. User codes are masked.</div>
+    <div id="dscLog" class="dsc-log"></div>
+  </div>
+</div>

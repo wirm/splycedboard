@@ -1,0 +1,21 @@
+{
+  "id": "dsc",
+  "name": "DSC PowerSeries Pro",
+  "icon": "🛡️",
+  "description": "Arms, disarms and watches the zones of a DSC PowerSeries Pro or Neo alarm panel over DSC's ITv2 integration protocol, through its IP communicator. Proof of concept: dashboard only, no Savant profile yet.",
+  "defaultEnabled": false,
+  "beta": true,
+  "endpoints": [
+    {
+      "port": 3072,
+      "protocol": "TCP",
+      "use": "The panel's ITv2 integration session (port set on the Connection tab)"
+    },
+    {
+      "port": 47200,
+      "protocol": "HTTP",
+      "path": "/api/dsc",
+      "use": "Dashboard"
+    }
+  ]
+}

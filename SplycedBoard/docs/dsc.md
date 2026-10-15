@@ -36,21 +36,30 @@ port.)
 
 1. **In SplycedBoard**: Settings → **Beta features** on, then switch **DSC PowerSeries Pro**
    on (Overview). Its **Connection** tab takes the integration ID and access code below.
-2. **Program the communicator** (installer programming: `[*][8][installer code][851][section]`).
+2. **PowerSeries Pro: switch its Ethernet on.** `[*][8][installer code][383]` option 3, "Ethernet
+   Enable", is **off** from the factory, and until it's on the panel's Ethernet port won't even
+   link (installation manual, page 135). Its IP then comes from DHCP: `[851][001]` left at
+   `000.000.000.000`; an address there makes it static, with `[002]` and `[003]` to match.
+3. **Program the communicator** (installer programming: `[*][8][installer code][851][section]`).
    Use an integration session nothing else uses: Alarm.com, PowerManage or DLS may already
-   have one. Session 1 is below; sessions 2–4 repeat the same sections further on (Neo:
-   from `[450]`, `[477]` and `[504]`).
+   have one. Session 1 is below; sessions 2–4 repeat the same sections 27 further on, on both
+   panels: session 2 is `[450]`–`[460]` (access code `[450]`, options `[452]` and `[453]`,
+   server IP `[455]`, port `[456]`), session 3 from `[477]`, session 4 from `[504]`. The
+   integration ID `[422]` is shared. On the one PowerSeries Pro reported working, session 1
+   worked and session 2 didn't (it used the notification port plus one).
 
    | Section | PowerSeries Pro | PowerSeries Neo (communicator firmware 5.x) |
    |---|---|---|
    | `[422]` integration ID | read it (12 characters) into SplycedBoard | the same |
    | access code | `[423]`: 32 hex digits (type 2) | type 1: `[423]`, 8 hex digits; type 2: `[700]`, 32 hex |
-   | `[425]` options | 3, 4, 5 (Ethernet, type 2, ITv2) | 3 and 5 (type 1), or 3, 4, 5 (type 2) |
+   | `[425]` options | 3, 4, 5 (Ethernet is off from the factory; the manual and its worksheet disagree on whether 4 or 5 is ITv2, so both) | 3 and 5 (type 1), or 3, 4, 5 (type 2) |
    | `[426]` options | 3 and 4 (real-time notification) | 3 only |
    | `[428]` server IP | the Savant host's IP, 3 digits an octet | the same |
    | `[429]` port | `03072` (decimal on the Pro) | `0C00` (hex: 3072) |
+   | `[431]` server DNS | blank (a name there is used instead of `[428]`) | the same |
 
-   Then exit programming (`[851][999]` = `55` restarts the communicator).
+   Then leave programming (`[#]` until out) and restart the communicator: `[851][999]` = `55`.
+   **`55`, not `00`:** `00` returns the communicator to factory settings, erasing all of the above.
    Optionally, `[711]` sets how long the communicator waits on a quiet session (default 300
    seconds); SplycedBoard polls every 50.
    - **PowerSeries Pro:** `[382]` option 5 makes the panel expect an external alternate
@@ -61,7 +70,7 @@ port.)
    - Newer communicator firmware (5.63) first offers an undocumented "type 3" encryption;
      SplycedBoard turns it down, as Johnson Controls' own cloud does, and the panel falls back
      to type 1 or 2.
-3. Watch the **Messages** tab: the panel dials in, the session opens (`Session open (AES-128-ECB,
+4. Watch the **Messages** tab: the panel dials in, the session opens (`Session open (AES-128-ECB,
    type 2)`), the panel reports its partitions and zones, and the Panel tab fills in. A wrong
    integration ID or access code shows there, during the handshake.
 

@@ -41,7 +41,7 @@ class Hub extends EventEmitter {
   constructor({ dataDir = DATA_DIR } = {}) {
     super();
     this.dataDir = dataDir;
-    this.settings = new JsonStore(path.join(dataDir, 'hub.json'), { integrations: {}, verbose: true });
+    this.settings = new JsonStore(path.join(dataDir, 'hub.json'), { integrations: {}, verbose: true, beta: false });
     this.log = logger.createLogger('hub');
     this.entries = new Map(); // id → { manifest, instance, running, error, queue }
     // Which version of each Savant profile Savant runs (see core/profiles.js).
@@ -73,7 +73,8 @@ class Hub extends EventEmitter {
   /** Start every integration that is switched on. */
   async startEnabled() {
     for (const entry of this.entries.values()) {
-      if (this.isEnabled(entry.manifest.id)) await this._enqueue(entry, () => this._start(entry));
+      if (!this.isAvailable(entry.manifest.id)) this.log.info(`${entry.manifest.name} is a beta feature, and Beta is off`);
+      else if (this.isEnabled(entry.manifest.id)) await this._enqueue(entry, () => this._start(entry));
       else this.log.info(`${entry.manifest.name} is disabled`);
     }
   }
@@ -93,6 +94,15 @@ class Hub extends EventEmitter {
 
   // ── Enable / disable ─────────────────────────────────────────────────────
 
+  /**
+   * Whether an integration exists as far as the dashboard is concerned. One marked
+   * "beta": true in its manifest only does with Beta switched on in Settings: otherwise it's
+   * left out of the list and doesn't run, whatever its own switch says.
+   */
+  isAvailable(id) {
+    return !this.entries.get(id)?.manifest.beta || this.getSettings().beta;
+  }
+
   isEnabled(id) {
     const saved = this.settings.load().integrations?.[id]?.enabled;
     if (typeof saved === 'boolean') return saved;
@@ -101,6 +111,9 @@ class Hub extends EventEmitter {
 
   async setEnabled(id, enabled) {
     const entry = this._entry(id);
+    if (enabled && !this.isAvailable(id)) {
+      throw Object.assign(new Error(`${entry.manifest.name} is a beta feature: switch Beta on in Settings first`), { status: 409 });
+    }
     this.settings.update((s) => {
       s.integrations = { ...s.integrations, [id]: { ...s.integrations?.[id], enabled } };
     });
@@ -114,7 +127,7 @@ class Hub extends EventEmitter {
     const entry = this._entry(id);
     await this._enqueue(entry, async () => {
       await this._stop(entry);
-      if (this.isEnabled(id)) await this._start(entry);
+      if (this.isEnabled(id) && this.isAvailable(id)) await this._start(entry);
     });
     return this.describe(id);
   }
@@ -192,8 +205,9 @@ class Hub extends EventEmitter {
     return { id, ...manifest, enabled, running: entry.running, status, profileStatus: this.profiles.summary(id) };
   }
 
-  list() {
-    return Array.from(this.entries.keys(), (id) => this.describe(id));
+  /** What the dashboard shows; `all` adds beta integrations hidden while Beta is off. */
+  list({ all = false } = {}) {
+    return Array.from(this.entries.keys()).filter((id) => all || this.isAvailable(id)).map((id) => this.describe(id));
   }
 
   /** Messages a newly connected dashboard needs to render current state. */
@@ -209,15 +223,26 @@ class Hub extends EventEmitter {
   // ── Hub settings ─────────────────────────────────────────────────────────
 
   getSettings() {
-    const { verbose } = this.settings.load();
-    return { verbose: verbose !== false };
+    const { verbose, beta } = this.settings.load();
+    return { verbose: verbose !== false, beta: beta === true };
   }
 
-  updateSettings({ verbose }) {
+  async updateSettings({ verbose, beta }) {
     if (typeof verbose === 'boolean') {
       this.settings.update((s) => { s.verbose = verbose; });
       logger.setVerbose(verbose);
       this.log.info(`Verbose logging ${verbose ? 'on' : 'off'}`);
+    }
+    if (typeof beta === 'boolean' && beta !== this.getSettings().beta) {
+      this.settings.update((s) => { s.beta = beta; });
+      this.log.info(`Beta features ${beta ? 'on' : 'off'}`);
+      // Beta integrations appear (and those switched on start), or stop and disappear.
+      for (const entry of this.entries.values()) {
+        if (!entry.manifest.beta) continue;
+        if (!beta) await this._enqueue(entry, () => this._stop(entry));
+        else if (this.isEnabled(entry.manifest.id)) await this._enqueue(entry, () => this._start(entry));
+      }
+      this.emit('change');
     }
     return this.getSettings();
   }

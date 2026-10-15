@@ -72,7 +72,8 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
   app.use(express.static(paths.PUBLIC_DIR));
 
   // ── Integration dashboard panels ───────────────────────────────────────────
-  for (const { id } of hub.list()) {
+  // Every integration, beta ones too, so switching Beta on needs no restart.
+  for (const { id } of hub.list({ all: true })) {
     app.use(`/ui/${id}`, express.static(path.join(paths.INTEGRATIONS_DIR, id, 'ui')));
   }
 
@@ -193,7 +194,13 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
     res.json({ entries: logger.recent(limit) });
   });
 
-  api.put('/settings', (req, res) => res.json(hub.updateSettings(req.body || {})));
+  api.put('/settings', async (req, res, next) => {
+    try {
+      res.json(await hub.updateSettings(req.body || {}));
+    } catch (err) {
+      next(err);
+    }
+  });
 
   api.post('/restart', (req, res) => {
     if (!appInfo.managed) {
@@ -233,7 +240,7 @@ async function createWebServer({ hub, port = WEB_PORT, app: appInfo, updates = n
   // /api/hub and every /api/<id> always answer (200/404/503), so the legacy root
   // mount only ever sees paths nobody else owns — e.g. /api/zone/level from the
   // Lutron profile.
-  const integrations = hub.list();
+  const integrations = hub.list({ all: true });
   for (const { id } of integrations) app.use(`/api/${id}`, integrationApi(id));
   for (const { id, legacyApiRoot } of integrations) {
     if (legacyApiRoot) app.use('/api', integrationApi(id, { fallthrough: true }));

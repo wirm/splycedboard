@@ -30,14 +30,14 @@ test('every integration has a valid manifest, implementation and Savant profile'
 test('installer CLI lists integrations and saves the chosen set', () => {
   const lines = cli('choices').trim().split('\n').map((l) => l.split('\t'));
   // Tools aren't offered: they aren't integrations to choose
-  assert.deepEqual(lines.map(([id]) => id), registry.manifests().filter((m) => m.category !== 'tool').map((m) => m.id));
-  assert.deepEqual(lines.map(([id]) => id), ['lutron', 'appletv', 'scli']);
+  assert.deepEqual(lines.map(([id]) => id), registry.manifests().filter((m) => m.category !== 'tool' && !m.beta).map((m) => m.id));
+  assert.deepEqual(lines.map(([id]) => id).slice(0, 3), ['lutron', 'appletv', 'scli']);
 
   cli('set-enabled', 'scli');
   const saved = h.readJson(path.join(h.DATA_DIR, 'hub.json'));
   assert.equal(saved.integrations.lutron.enabled, false);
   assert.equal(saved.integrations.scli.enabled, true);
-  assert.deepEqual(JSON.parse(cli('list')).map((i) => [i.id, i.enabled]), [['lutron', false], ['appletv', false], ['scli', true]]);
+  assert.deepEqual(JSON.parse(cli('list')).map((i) => [i.id, i.enabled]).slice(0, 3), [['lutron', false], ['appletv', false], ['scli', true]]);
   assert.equal(saved.integrations.samsungtv, undefined, 'tools keep their own setting');
 
   assert.match(cli('profiles', 'lutron,scli'), /\/lutron_leap bridge\.xml\n.*\/ip_requests\.xml\n$/);
@@ -90,11 +90,37 @@ test('hub settings toggle verbose logging', async () => {
   h.setEnabled({ lutron: false, scli: false });
   const hub = await h.startHub();
   try {
-    assert.deepEqual((await hub.put('/api/hub/settings', { verbose: false })).json, { verbose: false });
+    assert.deepEqual((await hub.put('/api/hub/settings', { verbose: false })).json, { verbose: false, beta: false });
     assert.equal(h.readJson(path.join(h.DATA_DIR, 'hub.json')).verbose, false);
     const { json } = await hub.get('/api/hub/logs?limit=5');
     assert.ok(Array.isArray(json.entries) && json.entries.length <= 5);
     assert.equal((await hub.post('/api/hub/restart')).status, 409, 'restart needs launchd');
+  } finally {
+    await hub.stop();
+  }
+});
+
+test('Beta: an integration marked beta is hidden and stopped until Beta is switched on', async (t) => {
+  const beta = registry.manifests().filter((m) => m.beta);
+  if (!beta.length) return t.skip('no beta integration to try it with');
+  const { id } = beta[0];
+  h.setEnabled({ [id]: true, lutron: false, scli: false }); // switched on, but Beta is off
+  const hub = await h.startHub();
+  try {
+    const listed = async () => (await hub.get('/api/hub')).json.integrations.map((i) => i.id);
+    assert.ok(!(await listed()).includes(id), 'hidden while Beta is off');
+    assert.equal(hub.hub.instance(id), null, 'and not running, though switched on');
+    assert.equal((await hub.put(`/api/hub/integrations/${id}`, { enabled: true })).status, 409);
+    assert.ok(!cli('choices').split('\n').some((l) => l.startsWith(`${id}\t`)), "the installer doesn't offer it");
+
+    assert.deepEqual((await hub.put('/api/hub/settings', { beta: true })).json, { verbose: true, beta: true });
+    assert.ok((await listed()).includes(id), 'listed with Beta on');
+    await h.waitFor(() => hub.hub.instance(id) != null, { what: `${id} started` });
+    assert.notEqual((await hub.get(`/ui/${id}/panel.html`)).status, 404, 'its page is there without a restart');
+
+    await hub.put('/api/hub/settings', { beta: false });
+    assert.ok(!(await listed()).includes(id), 'hidden again');
+    assert.equal(hub.hub.instance(id), null, 'and stopped');
   } finally {
     await hub.stop();
   }

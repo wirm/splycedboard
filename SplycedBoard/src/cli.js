@@ -27,7 +27,7 @@ const hubSettings = new JsonStore(path.join(paths.DATA_DIR, 'hub.json'), { integ
 const auth = new AuthStore(path.join(paths.DATA_DIR, 'auth.json'));
 
 /** The integrations the installer offers: everything but the tools. */
-const integrations = () => registry.manifests().filter((m) => m.category !== 'tool');
+const integrations = () => registry.manifests().filter((m) => m.category !== 'tool' && !m.beta);
 
 function isEnabled(manifest, saved) {
   const flag = saved.integrations?.[manifest.id]?.enabled;

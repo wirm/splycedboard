@@ -68,9 +68,12 @@ const SB = (() => {
     return location.hash.replace(/^#\/?/, '').split('/')[0] || 'overview';
   }
 
+  /** A loaded integration page that's no longer listed: a beta one, with Beta switched off. */
+  const isHidden = (route) => Boolean(panels[route]) && !integrations.some((i) => i.id === route);
+
   function showPage() {
     let route = currentRoute();
-    if (!$(`page-${route}`)) route = 'overview';
+    if (!$(`page-${route}`) || isHidden(route)) route = 'overview';
     document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === `page-${route}`));
     document.querySelectorAll('.nav-item').forEach((a) => a.classList.toggle('active', a.dataset.route === route));
     setMenuOpen(false);
@@ -155,6 +158,15 @@ const SB = (() => {
     renderProfiles();
     updateLogSources();
     list.forEach(applyPanelState);
+    // One that wasn't listed when this page loaded (Beta just switched on): load its page now.
+    for (const i of list) {
+      if (panels[i.id]) continue;
+      loadPanel(i).then(() => {
+        applyPanelState(i);
+        if (currentRoute() === i.id) showPage();
+      });
+    }
+    if (isHidden(currentRoute())) showPage();
   }
 
   async function setEnabled(id, enabled, checkbox) {
@@ -396,6 +408,7 @@ const SB = (() => {
     ]);
 
     $('verboseToggle').checked = settings.verbose;
+    $('betaToggle').checked = settings.beta;
   }
 
   function renderProfiles() {
@@ -648,6 +661,15 @@ const SB = (() => {
       try {
         settings = await api('PUT', '/api/hub/settings', { verbose: e.target.checked });
         toast(`Verbose logging ${settings.verbose ? 'on' : 'off'}`);
+      } catch (err) {
+        e.target.checked = !e.target.checked;
+        toast(err.message, 'error');
+      }
+    });
+    $('betaToggle').addEventListener('change', async (e) => {
+      try {
+        settings = await api('PUT', '/api/hub/settings', { beta: e.target.checked });
+        toast(settings.beta ? 'Beta features on: find them in the menu' : 'Beta features off');
       } catch (err) {
         e.target.checked = !e.target.checked;
         toast(err.message, 'error');
